@@ -1,0 +1,430 @@
+<title>Detour ATX Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root{
+    --ground:#EFEEEA;
+    --surface:#F7F6F3;
+    --panel:#E5E3DD;
+    --ink:#1A1917;
+    --ink-mute:#6A665E;
+    --ink-faint:#8D887F;
+    --rule:#D4D1CA;
+    --rule-strong:#B8B4AB;
+
+    --confirmed:#D8471A;
+    --reported:#4E6575;
+    --stale:#A8A399;
+    --event:#B07C00;
+
+    --map-bg:#E7E5DF;
+    --street:#CFCCC4;
+    --street-major:#BDB9B0;
+
+    --display:"Barlow Condensed","Helvetica Neue",Arial,sans-serif;
+    --body:"Source Serif 4",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --gutter:clamp(16px,4vw,44px);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#17171A; --surface:#1E1E22; --panel:#242429;
+      --ink:#EBE8E2; --ink-mute:#9C978D; --ink-faint:#787369;
+      --rule:#33333A; --rule-strong:#4A4A53;
+      --confirmed:#FF7A4D; --reported:#7FA0B4; --stale:#6C6862; --event:#E0A93B;
+      --map-bg:#1B1B1F; --street:#2E2E35; --street-major:#3D3D46;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#17171A; --surface:#1E1E22; --panel:#242429;
+    --ink:#EBE8E2; --ink-mute:#9C978D; --ink-faint:#787369;
+    --rule:#33333A; --rule-strong:#4A4A53;
+    --confirmed:#FF7A4D; --reported:#7FA0B4; --stale:#6C6862; --event:#E0A93B;
+    --map-bg:#1B1B1F; --street:#2E2E35; --street-major:#3D3D46;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:var(--body);
+       font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding-inline:var(--gutter);padding-block:0 64px}
+  h1,h2,h3,.eyebrow,.big{font-family:var(--display)}
+  h2{font-size:clamp(24px,3.4vw,32px);font-weight:700;line-height:1.1;margin:0 0 6px;text-wrap:balance}
+  h3{font-size:18px;font-weight:600;margin:0 0 6px;text-wrap:balance}
+  p{margin:0 0 14px}
+  code{font-family:var(--mono);font-size:.86em;color:var(--ink-mute)}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+           color:var(--ink-faint);margin:0 0 10px}
+  .col{max-width:66ch}
+
+  /* masthead */
+  header{border-bottom:2px solid var(--ink);padding-block:40px 0}
+  .id{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .id h1{font-size:clamp(34px,7vw,58px);font-weight:700;letter-spacing:-.02em;
+         line-height:.92;margin:0;text-transform:uppercase}
+  .live{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+        color:var(--confirmed);border:1px solid var(--confirmed);padding:3px 8px}
+  .when{font-family:var(--mono);font-size:12px;color:var(--ink-mute);margin:0 0 26px}
+  .thesis{font-size:clamp(17px,2.2vw,20px);line-height:1.45;max-width:60ch;margin:0 0 26px}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));
+         border-top:1px solid var(--rule)}
+  .stat{padding:14px 16px 16px 0}
+  .stat+.stat{border-left:1px solid var(--rule);padding-left:16px}
+  .big{display:block;font-size:32px;font-weight:700;line-height:1;
+       font-variant-numeric:tabular-nums;margin-bottom:4px}
+  .stat.hot .big{color:var(--confirmed)}
+  .lbl{display:block;font-family:var(--mono);font-size:10px;line-height:1.45;
+       letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint)}
+
+  section{padding-block:44px 0}
+
+  /* map */
+  .mapwrap{position:relative;background:var(--map-bg);border:1px solid var(--rule-strong);
+           margin-block:20px;overflow:hidden}
+  canvas{display:block;width:100%;height:auto;max-width:100%}
+  .maphint{position:absolute;left:12px;bottom:10px;font-family:var(--mono);font-size:10px;
+           letter-spacing:.06em;color:var(--ink-faint);pointer-events:none}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-block:16px 0}
+  .toggle{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+          padding:6px 11px;border:1px solid var(--rule-strong);background:transparent;
+          color:var(--ink-mute);cursor:pointer;display:flex;align-items:center;gap:7px}
+  .toggle:hover{border-color:var(--ink-mute)}
+  .toggle[aria-pressed="true"]{color:var(--ink);border-color:currentColor}
+  .swatch{width:16px;height:3px;display:inline-block}
+  .toggle[data-k="confirmed"] .swatch{background:var(--confirmed)}
+  .toggle[data-k="reported"] .swatch{background:var(--reported)}
+  .toggle[data-k="probably_over"] .swatch{background:var(--stale)}
+  .toggle[data-k="events"] .swatch{background:var(--event)}
+  .count{font-variant-numeric:tabular-nums;color:var(--ink-faint)}
+  :focus-visible{outline:2px solid var(--confirmed);outline-offset:2px}
+
+  /* funnel */
+  .funnel{display:flex;flex-direction:column;gap:12px;margin-block:20px}
+  .fr{display:flex;flex-direction:column;gap:4px}
+  .fr-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .fr-l{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
+  .fr-n{font-family:var(--display);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  .fr-bar{height:12px;background:var(--panel)}
+  .fr-fill{height:100%;background:var(--rule-strong)}
+  .fr.win .fr-fill{background:var(--confirmed)}
+  .fr.win .fr-n{color:var(--confirmed)}
+
+  /* events */
+  .events{display:grid;gap:18px;margin-block:20px}
+  .event{background:var(--surface);border:1px solid var(--rule-strong);
+         display:grid;grid-template-columns:4px 1fr}
+  .stripe{background:var(--event)}
+  .event.hazard .stripe{background:var(--confirmed)}
+  .event.none .stripe{background:var(--reported)}
+  .ebody{padding:15px 18px 17px 0;margin-left:16px}
+  .etop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .chip{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.08em;
+        text-transform:uppercase;padding:2.5px 7px;border:1px solid currentColor;white-space:nowrap}
+  .chip.cause{color:var(--event)}
+  .chip.impact-hazard{color:var(--confirmed)}
+  .chip.impact-none{color:var(--reported)}
+  .chip.impact-caution{color:var(--event)}
+  .ehead{font-weight:600;margin:0 0 6px;line-height:1.35}
+  .erat{margin:0 0 10px;font-size:15px;color:var(--ink-mute)}
+  .ev{margin:0;padding-left:16px;font-size:14px;color:var(--ink-mute)}
+  .ev li{margin-bottom:3px}
+  .members{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+           margin:10px 0 0;line-height:1.65}
+  .tools{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--ink-faint);
+         margin:10px 0 0}
+
+  /* callout */
+  .callout{border-left:3px solid var(--confirmed);padding:2px 0 2px 18px;margin-block:20px}
+  .callout pre{font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--ink-mute);
+               margin:10px 0;overflow-x:auto}
+
+  footer{margin-top:52px;padding-top:20px;border-top:2px solid var(--ink);
+         font-family:var(--mono);font-size:11px;line-height:1.75;color:var(--ink-faint)}
+  footer a{color:var(--ink-mute)}
+  footer p{margin:0}
+
+  @media (max-width:620px){
+    .stat+.stat{border-left:0;padding-left:0}
+    .stat{border-bottom:1px solid var(--rule);padding-right:0}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="id">
+    <h1>Detour ATX</h1>
+    <span class="live" id="live">Live snapshot</span>
+  </div>
+  <p class="when" id="when">loading&hellip;</p>
+  <p class="thesis">Austin publishes every road closure in the city and never publishes a
+    single detour. This is what its open feeds actually said at the moment of this snapshot &mdash;
+    including how much of it can be trusted.</p>
+  <div class="stats" id="stats"></div>
+</header>
+
+<section>
+  <p class="eyebrow">Central Austin</p>
+  <h2>Every full street closure, shaded by how much we believe it</h2>
+  <p class="col" style="color:var(--ink-mute)">Streets are drawn from the city's own centreline
+    layer rather than map tiles. Solid lines are closures we can stand behind; dashed lines are
+    permits whose own dates or notes suggest the work is finished. Rings mark clustered signal
+    failures.</p>
+
+  <div class="controls" id="controls"></div>
+  <div class="mapwrap">
+    <canvas id="map" width="1120" height="720" role="img"
+            aria-label="Map of central Austin showing full street closures shaded by confidence"></canvas>
+    <span class="maphint" id="maphint"></span>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">The hard part</p>
+  <h2>Most of this feed cannot be trusted, and the city says so</h2>
+  <p class="col" style="color:var(--ink-mute)">Of 3,853 work zone records, the city has verified
+    an end date on a handful and a position on none at all. Dates are permit windows, not work
+    windows. Every record is scored, and only the top tier is ever allowed to send a
+    notification.</p>
+  <div class="funnel" id="funnel"></div>
+  <p class="col" id="pushline" style="font-size:15px"></p>
+</section>
+
+<section>
+  <p class="eyebrow">Signal events</p>
+  <h2>What the desk editor made of today</h2>
+  <p class="col" style="color:var(--ink-mute)">Clustering is arithmetic &mdash; distance and time decide
+    that several signals are one event. Interpreting the cause is not, because each hypothesis is
+    tested by a different lookup: digging permits beside the cabinets, a venue next door, a crash
+    on the dispatch feed.</p>
+  <div class="events" id="events"></div>
+</section>
+
+<section>
+  <p class="eyebrow">Data defect</p>
+  <h2>The overnight sweep</h2>
+  <div class="callout col">
+    <p id="sweepline" style="margin-top:0"></p>
+    <pre id="sweeppre"></pre>
+    <p style="margin-bottom:0">Those records carry the moment a batch last counted them, not the
+      moment the fault began. Clustering on them chains half the city into one meaningless event,
+      and any duration derived from them is wrong &mdash; a signal unreachable for years reads as
+      unreachable for hours. They are excluded, and items built on a swept timestamp say the onset
+      is unknown rather than quoting a false figure.</p>
+  </div>
+</section>
+
+<footer>
+  <p id="foot">Built from the City of Austin open data portal.</p>
+  <p style="margin-top:8px">Sources &mdash; Roadway Work Zones <code>qyfh-gwei</code> &middot;
+    Traffic Signals Status <code>5zpr-dehc</code> &middot;
+    Real-Time Traffic Incident Reports <code>dx9v-zd7x</code> &middot;
+    Street Centerline <code>8hf2-pdmb</code> &middot;
+    311 Unified <code>xwdj-i9he</code> &middot;
+    <a href="https://data.austintexas.gov/">data.austintexas.gov</a></p>
+</footer>
+
+</div>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  var D = window.SNAPSHOT;
+  if (!D) { document.getElementById('when').textContent = 'Snapshot failed to load.'; return; }
+
+  var css = function (n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); };
+  var show = { confirmed: true, reported: true, probably_over: false, events: true };
+
+  /* ---------- header ---------- */
+  document.getElementById('when').textContent =
+    D.local_time + ' Austin time &middot; ' + D.crew.reason;
+
+  var t = D.totals, pct = function (n) { return (100 * n / t.work_zones).toFixed(1) + '%'; };
+  var inBox = D.closures.filter(function (c) { return c.active; }).length;
+  document.getElementById('stats').innerHTML = [
+    ['hot', t.full_closures_citywide, 'Full street closures<br>citywide'],
+    ['hot', 0, 'Detours published<br>for any of them'],
+    ['', pct(t.pushable), 'Of the feed is solid<br>enough to notify on'],
+    ['', t.signals_swept + '/' + t.signals_degraded, 'Signal records restamped<br>by an overnight batch']
+  ].map(function (s) {
+    return '<div class="stat ' + s[0] + '"><span class="big">' + s[1] +
+           '</span><span class="lbl">' + s[2] + '</span></div>';
+  }).join('');
+
+  /* ---------- funnel ---------- */
+  var conf = t.confidence, max = t.work_zones;
+  var rows = [
+    ['Work zone records in the feed', max, false],
+    ['Probably over &mdash; dates or notes say finished', conf['Probably over'], false],
+    ['Reported &mdash; plausible but unverified', conf['Reported'], false],
+    ['Confirmed &mdash; allowed to notify', conf['Confirmed'], true]
+  ];
+  document.getElementById('funnel').innerHTML = rows.map(function (r) {
+    return '<div class="fr' + (r[2] ? ' win' : '') + '"><div class="fr-top">' +
+      '<span class="fr-l">' + r[0] + '</span><span class="fr-n">' + r[1].toLocaleString() +
+      '</span></div><div class="fr-bar"><div class="fr-fill" style="width:' +
+      (100 * r[1] / max).toFixed(1) + '%"></div></div></div>';
+  }).join('');
+  document.getElementById('pushline').innerHTML =
+    'Only <strong>' + conf['Confirmed'].toLocaleString() + '</strong> records &mdash; ' + pct(t.pushable) +
+    ' of the feed &mdash; may generate a push notification. One alert about a closure that is not there ' +
+    'costs more trust than ten missed lane restrictions.';
+
+  /* ---------- sweep ---------- */
+  document.getElementById('sweepline').innerHTML =
+    '<strong>' + t.signals_swept + ' of ' + t.signals_degraded +
+    '</strong> degraded signals share a timestamp written by a nightly batch, not by a real ' +
+    'state change. On this snapshot the stamps were:';
+  document.getElementById('sweeppre').textContent = t.sweep_stamps.map(function (s) {
+    return s.replace('T', '  ').replace('+00:00', ' UTC');
+  }).join('\n');
+
+  /* ---------- events ---------- */
+  document.getElementById('events').innerHTML = D.events.map(function (e) {
+    var r = e.reading;
+    var impact = r ? r.driver_impact : 'none';
+    var body = '<div class="etop">' +
+      '<span class="chip cause">' + (r ? r.cause.replace('_', ' ') : 'not read') + '</span>' +
+      (r ? '<span class="chip impact-' + impact + '">driver impact: ' + impact + '</span>' : '') +
+      (r ? '<span class="chip" style="color:var(--ink-faint)">confidence ' +
+           r.confidence.toFixed(2) + '</span>' : '') + '</div>';
+    body += '<p class="ehead">' + (r ? r.headline : e.label) + '</p>';
+    if (r) body += '<p class="erat">' + r.rationale + '</p>';
+    if (r && r.evidence.length) {
+      body += '<ul class="ev">' + r.evidence.map(function (x) {
+        return '<li>' + x + '</li>'; }).join('') + '</ul>';
+    }
+    body += '<p class="members">' + e.members.map(function (m) { return m.name; }).join(' &middot; ') + '</p>';
+    if (r) body += '<p class="tools">tools called: ' + r.tools.join(' &rarr; ') + '</p>';
+    return '<div class="event ' + impact + '"><div class="stripe"></div><div class="ebody">' +
+           body + '</div></div>';
+  }).join('');
+
+  /* ---------- map ---------- */
+  var canvas = document.getElementById('map'), ctx = canvas.getContext('2d');
+  var box = D.bbox, W = box[2] - box[0], H = box[3] - box[1];
+  var MAJOR = { '1': 1, '2': 1, '4': 1, '5': 1 };
+
+  function layout() {
+    var cssW = canvas.parentNode.clientWidth || 1000;
+    var aspect = H / (W * Math.cos(((box[1] + box[3]) / 2) * Math.PI / 180));
+    var cssH = Math.max(320, Math.min(760, cssW * aspect));
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.height = cssH + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: cssW, h: cssH };
+  }
+
+  function draw() {
+    var s = layout(), w = s.w, h = s.h;
+    var latMid = (box[1] + box[3]) / 2, kx = Math.cos(latMid * Math.PI / 180);
+    var sx = w / (W * kx), sy = h / H, k = Math.min(sx, sy);
+    var offX = (w - W * kx * k) / 2, offY = (h - H * k) / 2;
+
+    function px(p) { return [offX + (p[0] - box[0]) * kx * k, offY + (box[3] - p[1]) * k]; }
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = css('--map-bg');
+    ctx.fillRect(0, 0, w, h);
+
+    function stroke(line, colour, width, dash) {
+      if (line.length < 2) return;
+      ctx.beginPath();
+      ctx.setLineDash(dash || []);
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      var a = px(line[0]);
+      ctx.moveTo(a[0], a[1]);
+      for (var i = 1; i < line.length; i++) { var b = px(line[i]); ctx.lineTo(b[0], b[1]); }
+      ctx.stroke();
+    }
+
+    var minor = css('--street'), major = css('--street-major');
+    D.streets.forEach(function (st) {
+      var big = MAJOR[st.cls];
+      stroke(st.line, big ? major : minor, big ? 1.5 : 0.7);
+    });
+
+    var colours = { confirmed: css('--confirmed'), reported: css('--reported'),
+                    probably_over: css('--stale') };
+    var order = ['probably_over', 'reported', 'confirmed'];
+    order.forEach(function (key) {
+      if (!show[key]) return;
+      D.closures.forEach(function (c) {
+        if (c.confidence !== key) return;
+        stroke(c.line, colours[key], key === 'confirmed' ? 3.4 : 2.4,
+               key === 'probably_over' ? [4, 4] : []);
+      });
+    });
+
+    if (show.events) {
+      ctx.setLineDash([]);
+      D.events.forEach(function (e) {
+        e.members.forEach(function (m) {
+          if (!m.point) return;
+          var p = px(m.point);
+          if (p[0] < -20 || p[0] > w + 20) return;
+          ctx.beginPath();
+          ctx.arc(p[0], p[1], 6, 0, Math.PI * 2);
+          ctx.strokeStyle = css('--event');
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(p[0], p[1], 2, 0, Math.PI * 2);
+          ctx.fillStyle = css('--event');
+          ctx.fill();
+        });
+      });
+    }
+
+    var shown = D.closures.filter(function (c) { return show[c.confidence]; }).length;
+    document.getElementById('maphint').textContent =
+      shown + ' closures drawn &middot; ' + D.streets.length.toLocaleString() + ' street segments';
+  }
+
+  /* ---------- controls ---------- */
+  var counts = { confirmed: 0, reported: 0, probably_over: 0 };
+  D.closures.forEach(function (c) { counts[c.confidence]++; });
+  var labels = { confirmed: 'Confirmed', reported: 'Reported',
+                 probably_over: 'Probably over', events: 'Signal events' };
+  var evCount = D.events.reduce(function (n, e) { return n + e.members.length; }, 0);
+
+  document.getElementById('controls').innerHTML =
+    ['confirmed', 'reported', 'probably_over', 'events'].map(function (k) {
+      return '<button class="toggle" id="tg-' + k + '" data-k="' + k + '" type="button" ' +
+             'aria-pressed="' + show[k] + '"><span class="swatch"></span>' + labels[k] +
+             ' <span class="count">' + (k === 'events' ? evCount : counts[k]) + '</span></button>';
+    }).join('');
+
+  document.getElementById('controls').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.toggle');
+    if (!btn) return;
+    var k = btn.dataset.k;
+    show[k] = !show[k];
+    btn.setAttribute('aria-pressed', String(show[k]));
+    draw();
+  });
+
+  document.getElementById('foot').textContent =
+    'Snapshot taken ' + D.local_time + ' Austin time. ' + t.work_zones.toLocaleString() +
+    ' work zone records, ' + t.signals_degraded + ' degraded signals, ' +
+    D.streets.length.toLocaleString() + ' street segments drawn from open data.';
+
+  draw();
+  var timer;
+  window.addEventListener('resize', function () {
+    clearTimeout(timer); timer = setTimeout(draw, 120);
+  });
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(draw);
+  }
+})();
+</script>

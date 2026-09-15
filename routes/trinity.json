@@ -1,0 +1,38 @@
+{
+  "name": "Trinity St downtown",
+  "note": "Traced from the Street Centerline layer (8hf2-pdmb) and ordered south-to-north: Trinity St is one_way=FT digitised northbound, so a north-to-south route here is illegal and map-matches into a zigzag. Runs through the CIP closure at E Cesar Chavez.",
+  "waypoints": [
+    [
+      -97.741447,
+      30.261378
+    ],
+    [
+      -97.741084,
+      30.2624
+    ],
+    [
+      -97.740368,
+      30.264278
+    ],
+    [
+      -97.74001,
+      30.265244
+    ],
+    [
+      -97.739343,
+      30.267074
+    ],
+    [
+      -97.738615,
+      30.268932
+    ],
+    [
+      -97.738272,
+      30.269901
+    ],
+    [
+      -97.737572,
+      30.271768
+    ]
+  ]
+}

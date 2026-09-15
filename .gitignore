@@ -1,0 +1,25 @@
+.cache/
+__pycache__/
+*.pyc
+ledger.jsonl
+.env
+out/
+drafts/
+snapshot.json
+
+# Secrets. Deliberately broad: a real key was once found in a file named
+# ".en" — a truncated ".env" that the exact-name rule did not catch.
+.env
+.env.*
+.en
+.en*
+!.env.example
+*.key
+*credentials*
+
+# Generated data snapshot for the static dashboard. Regenerate with:
+#   python -c "from detour import export; export.write('dist/data.js')"
+dist/data.js
+
+# Agent scratch memory, not part of the project.
+web/.claude/

@@ -1,0 +1,62 @@
+{
+  "name": "Guadalupe St corridor",
+  "note": "Waypoints are [longitude, latitude], GeoJSON order. Traced from the city's own Street Centerline layer (8hf2-pdmb) rather than hand-placed, so the route genuinely follows the roadway and the 'runs along' test has something real to detect. North Campus down to the Capitol.",
+  "waypoints": [
+    [
+      -97.74249,
+      30.294668
+    ],
+    [
+      -97.741779,
+      30.293309
+    ],
+    [
+      -97.741164,
+      30.292183
+    ],
+    [
+      -97.741255,
+      30.29087
+    ],
+    [
+      -97.741423,
+      30.289086
+    ],
+    [
+      -97.741558,
+      30.287724
+    ],
+    [
+      -97.741692,
+      30.286495
+    ],
+    [
+      -97.741818,
+      30.285004
+    ],
+    [
+      -97.741913,
+      30.283801
+    ],
+    [
+      -97.742052,
+      30.282173
+    ],
+    [
+      -97.741998,
+      30.280637
+    ],
+    [
+      -97.74261,
+      30.278867
+    ],
+    [
+      -97.743343,
+      30.276946
+    ],
+    [
+      -97.744134,
+      30.274859
+    ]
+  ]
+}
