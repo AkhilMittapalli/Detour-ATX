@@ -139,28 +139,48 @@ function directions(row) {
   return [true, true];
 }
 
-export function buildGraph(centerline) {
+export function buildGraph(centerline, { mode = 'drive', facilities = null } = {}) {
   const edges = [];
   const out = new Map();
   const nodePoints = new Map();
 
-  const add = (tail, head, length, seconds, points, name, segId) => {
+  const add = (tail, head, length, seconds, points, name, segId, stress, facility) => {
     const i = edges.length;
-    edges.push({ tail, head, length, seconds, points, name, segId, blocked: false });
+    edges.push({ tail, head, length, seconds, points, name, segId,
+                 blocked: false, stress, facility });
     if (!out.has(tail)) out.set(tail, []);
     out.get(tail).push(i);
     if (!out.has(head)) out.set(head, []);
   };
 
+  const cycling = mode === 'bike';
+  const index = cycling && facilities && facilities.length ? new FacilityIndex(facilities) : null;
+
   for (const row of centerline) {
+    /* Bikes are not legal on a freeway, so a freeway is not an edge of the
+     * bike network. Dropping it rather than penalising it means a corridor
+     * with no legal crossing reports "no route" — true, and better than
+     * quietly routing someone onto IH 35. */
+    if (cycling && bikesProhibited(row.road_class)) continue;
+
     const pts = coordsOf(row.the_geom);
     if (pts.length < 2) continue;
     const length = pathLength(pts);
     if (length <= 0) continue;
 
-    const seconds = length / speedMs(row);
     const name = (row.full_street_name || row.street_name || '').trim().toUpperCase();
     const segId = String(row.segment_id || row.objectid || '');
+
+    let seconds, stress = 1, facility = null;
+    if (cycling) {
+      const match = index ? index.lookup(pts, name) : null;
+      facility = match ? match.facility : null;
+      seconds = length / cyclingSpeedMs(facility);
+      stress = stressMultiplier(mphOf(row), facility, match ? match.comfort : null);
+    } else {
+      seconds = length / speedMs(row);
+    }
+
     const tail = nodeKey(pts[0]), head = nodeKey(pts[pts.length - 1]);
     if (tail === head) continue;
 
@@ -168,8 +188,8 @@ export function buildGraph(centerline) {
     nodePoints.set(head, pts[pts.length - 1]);
 
     const [fwd, back] = directions(row);
-    if (fwd) add(tail, head, length, seconds, pts, name, segId);
-    if (back) add(head, tail, length, seconds, pts.slice().reverse(), name, segId);
+    if (fwd) add(tail, head, length, seconds, pts, name, segId, stress, facility);
+    if (back) add(head, tail, length, seconds, pts.slice().reverse(), name, segId, stress, facility);
   }
   return { edges, out, nodePoints };
 }
@@ -231,7 +251,7 @@ export function shortestPath(graph, start, goal, { avoidBlocked = true } = {}) {
     for (const i of graph.out.get(node) || []) {
       const edge = graph.edges[i];
       if (avoidBlocked && edge.blocked) continue;
-      const next = cost + edge.seconds;
+      const next = cost + edge.seconds * (edge.stress || 1);
       if (next < (best.get(edge.head) ?? Infinity)) {
         best.set(edge.head, next);
         came.set(edge.head, [node, i]);
@@ -241,17 +261,22 @@ export function shortestPath(graph, start, goal, { avoidBlocked = true } = {}) {
   }
 
   if (!best.has(goal)) return null;
+
+  /* best.get(goal) is perceived cost, which is what Dijkstra minimised and
+   * what nobody should ever be shown. Re-walk the path for the real
+   * duration. In driving mode every stress is 1 and the two agree. */
   const indices = [];
-  let metres = 0, cursor = goal;
+  let metres = 0, seconds = 0, cursor = goal;
   while (cursor !== start) {
     const step = came.get(cursor);
     if (!step) return null;
     indices.push(step[1]);
     metres += graph.edges[step[1]].length;
+    seconds += graph.edges[step[1]].seconds;
     cursor = step[0];
   }
   indices.reverse();
-  return { seconds: best.get(goal), metres, indices };
+  return { seconds, metres, indices };
 }
 
 /* Map-match a saved route leg by leg.
@@ -626,3 +651,257 @@ export function combineTier(tier, verdict) {
 
 export const isPushable = (tier, verdict) =>
   tier === TIER.BLOCKING && verdict.level === CONFIDENCE.CONFIRMED;
+
+/* ======================================================================
+ * The cyclist view
+ *
+ * Measured against the live feeds: 1,819 of 4,056 work zones sit within
+ * 20 m of dedicated bike infrastructure, 614 of those on protected or
+ * high-comfort infrastructure — and only 87 of the 1,819 mention bikes
+ * anywhere in the description. 4.8%.
+ *
+ * The second failure is quieter. vehicle_impact is written from a car:
+ * 1,593 of those zones say "some-lanes-closed", which for a driver means
+ * losing a lane and waiting. If the closed lane IS the bike lane, the rider
+ * lost 100% of their lanes. We re-tier rather than inherit that.
+ * ====================================================================== */
+
+/* bike_level_of_comfort is undocumented in the portal, so these were
+ * decoded by cross-tabbing against bicycle_facility across all 17,753 rows:
+ * H is 453 protected one-way + 224 two-way + 48 buffered; HP is 1,066 paved
+ * trail; HU is 426 unpaved trail; M is painted lanes; L is shoulders.
+ * EL, SS, RT and TC do not separate cleanly, so they stay unranked — with
+ * the 3,949 rows carrying no code, that is 30% we decline to rate. */
+const COMFORT_RANK = { H: 3, HP: 3, HU: 2, M: 2, L: 1 };
+
+export const DEDICATED = new Set([
+  'Bike Lane', 'Bike Lane - Buffered', 'Bike Lane - Protected One-Way',
+  'Bike Lane - Protected Two-Way', 'Bike Lane - wParking', 'Bike Lane - Climbing',
+  'Trail - Paved', 'Trail - Unpaved', 'Neighborhood Bikeway', 'Sharrows', 'Shared Lane',
+]);
+
+/* Something physical, or a whole quiet street, between rider and traffic.
+ * Losing one is categorically different from losing paint, because there is
+ * nowhere comfortable to fall back to. */
+export const SEPARATED = new Set([
+  'Bike Lane - Protected One-Way', 'Bike Lane - Protected Two-Way',
+  'Bike Lane - Buffered', 'Trail - Paved', 'Neighborhood Bikeway',
+]);
+
+/* Interstates and tollways (1), divided highways (2), freeway ramps (10).
+ * Bicycles are prohibited on all three in Texas. Not a theoretical guard:
+ * routing downtown to south Austin, the I-35 mainlane matched a "Shared
+ * Lane" at 0.0 m and a paved trail at 11.9 m, because frontage roads and
+ * the shared-use path run within metres of the mainlane centreline. */
+const BIKES_PROHIBITED = new Set(['1', '2', '10']);
+export const bikesProhibited = (roadClass) => BIKES_PROHIBITED.has((roadClass || '').trim());
+
+export const comfortRank = (code) =>
+  code ? (COMFORT_RANK[code.trim().toUpperCase()] ?? null) : null;
+
+export const isDedicated = (f) => DEDICATED.has((f || '').trim());
+export const isSeparated = (f) => SEPARATED.has((f || '').trim());
+
+/* The layer's own labels are database values, not English. "Bike Lane -
+ * Protected One-Way" is precise and reads terribly in the middle of a
+ * sentence, so every facility gets a phrase a person would actually say. */
+const FACILITY_LABEL = {
+  'Bike Lane': 'bike lane',
+  'Bike Lane - Buffered': 'buffered bike lane',
+  'Bike Lane - Protected One-Way': 'protected bike lane',
+  'Bike Lane - Protected Two-Way': 'two-way protected bike lane',
+  'Bike Lane - wParking': 'bike lane beside parking',
+  'Bike Lane - Climbing': 'uphill bike lane',
+  'Trail - Paved': 'paved trail',
+  'Trail - Unpaved': 'unpaved trail',
+  'Neighborhood Bikeway': 'neighbourhood bikeway',
+  Sharrows: 'shared-lane markings',
+  'Shared Lane': 'shared lane',
+};
+
+export const facilityLabel = (f) =>
+  FACILITY_LABEL[(f || '').trim()] || (f || '').trim().toLowerCase() || 'bike route';
+
+const CYCLIST = /(bike\s*lane|bicycle\s*lane|bikeway|sharrow|shared\s*lane|(bike|bicycle|cycl\w*)[^.]{0,30}(clos|detour|reroute|restrict)|(clos|detour|reroute)[^.]{0,30}(bike|bicycle)|\bshoulder[^.]{0,25}clos)/i;
+
+/* Almost always false. That is the finding, not a weak pattern. */
+export const affectsCyclists = (zone) =>
+  CYCLIST.test(`${zone.name || ''} ${zone.description || ''} ${zone.road_names || ''}`);
+
+/* Metres per second on the flat. Austin is not flat, but the centreline
+ * layer carries no elevation and pretending to model gradient would be
+ * invention. */
+const CYCLING_SPEED_MS = 4.4, UNPAVED_SPEED_MS = 3.3;
+export const cyclingSpeedMs = (f) =>
+  (f || '').trim() === 'Trail - Unpaved' ? UNPAVED_SPEED_MS : CYCLING_SPEED_MS;
+
+/* How much worse a metre feels than it measures. Calibrated judgement, not
+ * measurement: it follows the shape of the Level of Traffic Stress
+ * literature, where stress rises sharply with motor traffic speed once no
+ * separation exists. Deliberately steep at the top — a 50 mph arterial with
+ * no facility scores 9, so Dijkstra treats 1 km of it as worse than 8 km of
+ * neighbourhood street. That is intended, not an artefact. */
+const MIXED_TRAFFIC_STRESS = [[25, 1.6], [35, 2.6], [45, 4.5], [Infinity, 9]];
+
+export function stressMultiplier(mph, facility, comfort) {
+  const name = (facility || '').trim();
+  if (SEPARATED.has(name)) return 1;
+  if (name === 'Sharrows' || name === 'Shared Lane') return 1.8;
+  if (DEDICATED.has(name)) return 1.35;
+
+  let base = 9;
+  for (const [ceiling, penalty] of MIXED_TRAFFIC_STRESS) {
+    if (mph <= ceiling) { base = penalty; break; }
+  }
+
+  /* An unrated street is not evidence of a bad street. Where the city rated
+   * it comfortable, take the rating; where it said nothing, fall back to the
+   * traffic-speed estimate rather than assuming the worst. */
+  const rank = comfortRank(comfort);
+  if (rank === 3) return Math.min(base, 1.2);
+  if (rank === 2) return Math.min(base, 1.9);
+  return base;
+}
+
+export function mphOf(row) {
+  const mph = parseFloat(row.speed_limit);
+  if (Number.isFinite(mph) && mph > 0) return mph;
+  return ROAD_CLASS_SPEED[(row.road_class || '').trim()] ?? 30;
+}
+
+/* The layer is an export of the whole Comprehensive Transportation Network,
+ * so 11,617 of its 17,753 rows are ordinary street carrying a comfort rating
+ * and no bike facility at all. Join against all of them and 74% of work
+ * zones appear to "affect cyclists" — true of nothing, useful to nobody. */
+export function indexFacilities(rows, { dedicatedOnly = true } = {}) {
+  const out = [];
+  for (const row of rows) {
+    const facility = (row.bicycle_facility || '').trim();
+    if (dedicatedOnly && !DEDICATED.has(facility)) continue;
+    const points = coordsOf(row.the_geom);
+    if (points.length < 2) continue;
+    out.push({
+      points, box: bbox(points), facility,
+      comfort: (row.bike_level_of_comfort || '').trim() || null,
+      lineType: (row.line_type || '').trim(),
+      street: (row.full_street_name || '').trim().toUpperCase(),
+      separated: SEPARATED.has(facility),
+    });
+  }
+  return out;
+}
+
+/* Grid-bucketed lookup from a street segment to its bike facility. A linear
+ * scan is fine for a handful of work zones and far too slow here: a
+ * cross-town corridor is tens of thousands of centreline rows against
+ * thousands of facility segments. */
+class FacilityIndex {
+  constructor(facilities) {
+    this.cell = 0.004; // roughly 400 m
+    this.cells = new Map();
+    for (const f of facilities) {
+      const [minLon, minLat, maxLon, maxLat] = f.box;
+      for (let cx = Math.floor(minLon / this.cell); cx <= Math.floor(maxLon / this.cell); cx++) {
+        for (let cy = Math.floor(minLat / this.cell); cy <= Math.floor(maxLat / this.cell); cy++) {
+          const key = cx + ',' + cy;
+          if (!this.cells.has(key)) this.cells.set(key, []);
+          this.cells.get(key).push(f);
+        }
+      }
+    }
+  }
+
+  /* Proximity alone is not enough, and the failure is not hypothetical.
+   * Downtown, the I-35 mainlane sits 0.0 m from a service-road shared lane
+   * and 11.9 m from the shared-use path, because that is how a stacked
+   * urban freeway is built. Two guards: an off-street facility never
+   * credits a road segment, and an on-street facility must agree on the
+   * street name whenever both names are known. */
+  lookup(points, name, tolerance = 15) {
+    const mid = points[Math.floor(points.length / 2)];
+    const key = Math.floor(mid[0] / this.cell) + ',' + Math.floor(mid[1] / this.cell);
+
+    let best = null, bestD = tolerance;
+    for (const f of this.cells.get(key) || []) {
+      if (f.lineType.startsWith('Off-Street')) continue;
+      if (name && f.street && f.street !== name) continue;
+      const d = pathToPath(points, f.points, tolerance);
+      if (d < bestD) { best = f; bestD = d; }
+    }
+    return best;
+  }
+}
+
+export function nearestFacility(path, facilities, tolerance = 20) {
+  if (!path.length) return null;
+  const search = padBbox(bbox(path), tolerance + 25);
+  let best = null, bestD = tolerance;
+  for (const f of facilities) {
+    if (!boxesOverlap(search, f.box)) continue;
+    const d = pathToPath(path, f.points, tolerance);
+    if (d < bestD) { best = f; bestD = d; }
+  }
+  return best ? { facility: best, distance: bestD } : null;
+}
+
+/* Re-read a work zone as a cyclist rather than as a driver.
+ *
+ * The re-tiering is the point. some-lanes-closed is the feed's most common
+ * impact value and it is written from a car. When the closed lane is a bike
+ * lane, the rider has not lost some of their options — they have lost all
+ * of them, and the fallback is a live traffic lane.
+ *
+ * We never do the reverse. all-lanes-closed is not softened here, because
+ * being wrong in that direction puts someone in front of a truck. */
+export function bikeImpact(zone, facilities, tolerance = 20) {
+  const hit = nearestFacility(coordsOf(zone.geometry), facilities, tolerance);
+  if (!hit) return null;
+
+  const { facility, distance } = hit;
+  const impact = (zone.vehicle_impact || '').trim().toLowerCase();
+  const saidSo = affectsCyclists(zone);
+
+  const label = facilityLabel(facility.facility);
+
+  let tier, note;
+  if (impact === 'all-lanes-closed') {
+    tier = TIER.BLOCKING;
+    note = `Full closure across the ${label}`;
+  } else if (facility.separated) {
+    tier = TIER.BLOCKING;
+    note = `The ${label} is closed. The feed calls this a partial closure, which is true for a car and not for a bike`;
+  } else {
+    tier = TIER.SLOWING;
+    note = `Work in the ${label} — expect to merge out`;
+  }
+
+  return { facility, label, distance, separated: facility.separated, saidSo, tier, note };
+}
+
+/* How much of a route runs on infrastructure built for bikes, and how
+ * hostile the rest of it is. Both numbers go in front of the rider before
+ * they commit to the ride. */
+export function routeComfort(graph, indices) {
+  let total = 0, onFacility = 0, onSeparated = 0, weighted = 0, worst = 1, hostile = 0;
+  for (const i of indices) {
+    const e = graph.edges[i];
+    const stress = e.stress || 1;
+    total += e.length;
+    weighted += e.length * stress;
+    worst = Math.max(worst, stress);
+    if (stress >= 2.6) hostile += e.length;
+    if (e.facility) {
+      onFacility += e.length;
+      if (SEPARATED.has(e.facility)) onSeparated += e.length;
+    }
+  }
+  if (!total) return null;
+  return {
+    metres: total,
+    facilityShare: onFacility / total,
+    separatedShare: onSeparated / total,
+    avgStress: weighted / total,
+    worstStress: worst,
+    hostileMetres: hostile,
+  };
+}

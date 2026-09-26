@@ -42,6 +42,13 @@ python cli.py routes/guadalupe.json
 python cli.py --audit
 ```
 
+Read the same route as a cyclist — closures on bike infrastructure are
+re-tiered, because the feed's impact field is written from inside a car:
+
+```bash
+python cli.py routes/south-congress-commute.json --bike
+```
+
 ```bash
 python cli.py --confirm <record_id>          # a resident saw it; --absent if not
 python cli.py --ledger                       # ground truth tally
@@ -320,6 +327,96 @@ corridor event at the same minute survives it.
 
 ---
 
+## The cyclist view
+
+The feed is written from inside a car, and once you look for it the bias is
+measurable.
+
+Joining all 4,056 work zones against Austin's bike facilities layer
+(`23hw-a95n`, 17,753 segments) at 20 m:
+
+```
+1,819 of 4,056 zones sit on dedicated bike infrastructure   (44.8%)
+  614 of those on protected or high-comfort infrastructure
+   87 of the 1,819 mention bikes anywhere in the description  (4.8%)
+```
+
+**The city closes a protected bike lane and says nothing about it nineteen
+times out of twenty.**
+
+There is a second, quieter failure. 1,593 of those 1,819 zones are tagged
+`some-lanes-closed`. For a driver that means losing a lane and waiting. If
+the closed lane *is* the bike lane, the rider has lost 100% of their lanes
+and the fallback is a live traffic lane. `vehicle_impact` systematically
+understates what happened to them, so `bike.py` re-tiers rather than
+inheriting the mistake — and only ever upward. A zone the feed calls
+`all-lanes-closed` is never softened, because being wrong in that direction
+puts someone in front of a truck.
+
+### Decoding an undocumented field
+
+`bike_level_of_comfort` has no column descriptions in the portal. The codes
+were decoded by cross-tabbing against `bicycle_facility` across all 17,753
+rows:
+
+```
+H    819   453 protected one-way + 224 two-way + 48 buffered   -> high
+HP 1,166   1,066 paved trail                                   -> high
+HU   439   426 unpaved trail                                   -> tolerable
+M  6,421   bike lanes, wide curb lanes: painted, not separated -> tolerable
+L  3,506   shoulders and unrated street                        -> stressful
+```
+
+`EL`, `SS`, `RT` and `TC` do not separate cleanly against facility type, so
+they stay unranked. With the 3,949 rows carrying no code at all, that is 30%
+of the layer left unrated rather than guessed at. An unrated street is not
+evidence of a bad street.
+
+### Routing, and the two guards it needed
+
+Bike routing changes edge cost, not graph shape. Duration is computed at
+cycling speed, and each edge carries a *stress* multiplier so Dijkstra
+prefers a comfortable street over a merely short one. Stress is perceived
+cost, never shown: `shortest_path` re-walks the chosen path to recover real
+seconds, or the app would quote a rider forty minutes for a twenty-five
+minute ride.
+
+Two guards were added after the first live run routed badly:
+
+**Freeways are dropped from the bike network outright.** Road classes 1, 2
+and 10 are interstates, divided highways and freeway ramps, where bicycles
+are prohibited in Texas. Penalising them is not enough — the I-35 mainlane
+matched a service-road "Shared Lane" at **0.0 m** and the shared-use path at
+**11.9 m**, because that is simply how a stacked urban freeway is built.
+Without the guard, the router can be handed a freeway and told it is
+comfortable. A corridor whose only link is a highway now reports no legal
+ride, which is true and better than the alternative.
+
+**Proximity alone cannot assign a facility to a street.** An off-street
+facility never credits a road segment — a trail beside a road does not make
+the road pleasant — and an on-street facility must agree on the street name
+whenever both are known. 65% of dedicated facilities carry a street name,
+which is exactly the population at risk of a parallel-road match.
+
+Downtown to south Austin, after the guards: driving takes I-35 in 5 minutes;
+riding takes S Congress and neighbourhood streets, 36% further, 29 minutes,
+**100% of it on dedicated bike infrastructure**, worst stress 1.4.
+
+### Saying it in the rider's words
+
+`--bike` on the CLI, a Driving/Cycling toggle in the web app. It changes the
+whole briefing, not a display preference: the toll option disappears because
+the bike network has no tolls in it by construction, "driven past it" becomes
+"ridden past it", and the crew-timing advice stops talking about queueing
+behind a truck and starts talking about steel plates left over the trench.
+
+One wording note worth keeping. The sentence is "the permit does not say what
+this means for bikes", not "never mentions bikes" — a live record reads *will
+electrify the existing bike station on E 2nd St*, which names a bike and
+warns a rider of nothing.
+
+---
+
 ## The work calendar
 
 This module exists because **the agent found it, not me**. Asked about a
@@ -413,6 +510,24 @@ a bug before it produced a fix.
   confirmed in live data. The other patterns in `CLOSEOUT_PATTERNS` are
   plausible variants and should be scored individually once the ground truth
   loop has confirmations.
+- **Cycling stress weights are calibrated judgement, not measurement.** They
+  follow the shape of the Level of Traffic Stress literature — stress rising
+  sharply with motor traffic speed once no separation exists — but no Austin
+  rider has been asked whether a 4.5 on Lamar feels like a 4.5. The ground
+  truth loop is the right place to find out; it has no cycling observations
+  yet.
+- **There is no elevation anywhere in this.** The centreline layer carries
+  none, and Austin is not flat. A route that is comfortable and short can
+  still be a climb, and the app will not warn you.
+- **A closed bike lane does not trigger a detour.** Only `all-lanes-closed`
+  zones are subtracted from the graph. A shut protected lane is reported as
+  Blocking with what it means, but the route still runs through it, because
+  the rider usually *can* pass — in traffic. Routing them blocks out of the
+  way for something they clear in thirty seconds would be the wrong trade,
+  and making that call properly needs observations we do not have.
+- **30% of the comfort layer is unrated**, and unrated is not scored as bad.
+  A quiet street the city never got round to rating is routed on its speed
+  limit, which will sometimes be pessimistic.
 
 ---
 
@@ -424,6 +539,7 @@ detour/
   sources.py      Socrata clients, and the timezone normalisation
   confidence.py   the confidence model, and why each verdict was reached
   severity.py     three tiers, and how confidence caps them
+  bike.py         the cyclist view: comfort, re-tiering, cycling stress
   route.py        saved routes and the spatial join
   describe.py     permit narrative to one readable sentence
   graph.py        routable street graph, Dijkstra, route map-matching
@@ -449,10 +565,10 @@ detour/
   export.py       JSON snapshot for a frontend, basemap included
 dist/             the published dashboard (index.html + data.js)
   brief.py        assembly and ordering
-cli.py            terminal renderer, --audit, --confirm, --ledger,
+cli.py            terminal renderer, --audit, --bike, --confirm, --ledger,
                   --verify, --verify-route, --models, --json
 routes/           saved routes, traced from the centreline layer
-tests/            202 offline tests, no network, no API key
+tests/            241 offline tests, no network, no API key
 ```
 
 ## The dashboard

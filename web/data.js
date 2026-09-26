@@ -20,6 +20,7 @@ export const DATASETS = {
   signals: '5zpr-dehc',
   incidents: 'dx9v-zd7x',
   centerline: '8hf2-pdmb',
+  bikeFacilities: '23hw-a95n',
 };
 
 // Free, and it lifts the shared anonymous throttle. Optional.
@@ -161,6 +162,21 @@ export async function fetchCenterline(box, opts) {
     $limit: String(CENTERLINE_CAP),
   }, opts);
 }
+
+/* 17,753 rows citywide, and the whole layer is an export of the
+ * Comprehensive Transportation Network — two thirds of it is ordinary
+ * street carrying a comfort rating and no bike facility at all. Filtering
+ * to real facilities is the engine's job, not the server's, because the
+ * comfort rating on an unrated street is still worth reading when routing. */
+const BIKE_FIELDS =
+  'the_geom,bicycle_facility,bike_level_of_comfort,line_type,full_street_name';
+
+export const fetchBikeFacilities = (box, opts) =>
+  soda(DATASETS.bikeFacilities, {
+    $select: BIKE_FIELDS,
+    $where: withinBox('the_geom', box),
+    $limit: '20000',
+  }, opts);
 
 const ZONE_FIELDS =
   'id,road_names,name,description,vehicle_impact,direction,critical_corridor,' +

@@ -371,6 +371,12 @@ def main() -> int:
         metavar="NAME",
         help="create a saved route from two addresses (use with --from and --to)",
     )
+    parser.add_argument(
+        "--bike",
+        action="store_true",
+        help="read the route as a cyclist: closures on bike infrastructure are "
+             "re-tiered, because the feed's impact field is written from a car",
+    )
     parser.add_argument("--from", dest="origin", help="origin address")
     parser.add_argument("--to", dest="dest", help="destination address")
     parser.add_argument(
@@ -721,6 +727,7 @@ def main() -> int:
             use_cache=not args.fresh,
             with_detour=not args.no_detour,
             with_transit=not args.no_transit,
+            mode="bike" if args.bike else "drive",
         )
     except (RuntimeError, ValueError, OSError) as exc:
         print(f"detour: {exc}", file=sys.stderr)

@@ -48,6 +48,10 @@ class Edge:
     seconds: float
     points: list[geo.Point]
     blocked: bool = False
+    # Perceived cost per real second. 1.0 for driving; for cycling it rises
+    # with motor traffic speed where no bike facility exists. Routing uses
+    # `seconds * stress`; every duration reported to a human uses `seconds`.
+    stress: float = 1.0
 
 
 @dataclass
@@ -102,11 +106,46 @@ def _directions(row: dict) -> tuple[bool, bool]:
     return True, True
 
 
-def build(centerline: list[dict]) -> Graph:
-    """Turn centreline rows into a directed graph."""
+def _mph_of(row: dict) -> float:
+    raw = (row.get("speed_limit") or "").strip()
+    try:
+        mph = float(raw)
+    except ValueError:
+        mph = 0.0
+    if mph <= 0:
+        mph = ROAD_CLASS_SPEED.get((row.get("road_class") or "").strip(), DEFAULT_SPEED_MPH)
+    return mph
+
+
+def build(centerline: list[dict], *, mode: str = "drive", facilities=None) -> Graph:
+    """Turn centreline rows into a directed graph.
+
+    `mode="bike"` changes two things and nothing else. Edge duration is
+    computed at cycling speed instead of the posted limit, and each edge
+    carries a stress multiplier so that Dijkstra prefers comfortable streets
+    over merely short ones. The graph's shape — which segments connect to
+    which — is identical, because the centreline layer is the street network
+    either way.
+
+    `facilities` is an optional list of `bike.Facility`. Without it, bike
+    mode still works and simply has no comfort information to lean on, which
+    degrades to routing by traffic speed alone.
+    """
     graph = Graph()
+    cycling = mode == "bike"
+
+    if cycling:
+        from . import bike as bike_mod
+    index = _FacilityIndex(facilities) if (cycling and facilities) else None
 
     for row in centerline:
+        # Bikes are not legal on a freeway, so a freeway is not an edge of
+        # the bike network. Dropping it outright rather than penalising it
+        # means a corridor with no legal crossing reports "no route" — which
+        # is true, and better than quietly routing someone onto IH 35.
+        if cycling and bike_mod.bikes_prohibited(row.get("road_class")):
+            continue
+
         points = geo.coords_of(row.get("the_geom"))
         if len(points) < 2:
             continue
@@ -115,9 +154,18 @@ def build(centerline: list[dict]) -> Graph:
         if length <= 0:
             continue
 
-        seconds = length / _speed_ms(row)
         name = (row.get("full_street_name") or row.get("street_name") or "").strip().upper()
         segment_id = str(row.get("segment_id") or row.get("objectid") or "")
+
+        if cycling:
+            match = index.lookup(points, name) if index else None
+            facility = match.facility if match else None
+            comfort = match.comfort if match else None
+            seconds = length / bike_mod.cycling_speed_ms(facility)
+            stress = bike_mod.stress_multiplier(_mph_of(row), facility, comfort)
+        else:
+            seconds = length / _speed_ms(row)
+            stress = 1.0
 
         tail, head = node_of(points[0]), node_of(points[-1])
         if tail == head:
@@ -125,14 +173,66 @@ def build(centerline: list[dict]) -> Graph:
 
         forward, backward = _directions(row)
         if forward:
-            graph.add(Edge(segment_id, name, tail, head, length, seconds, points))
+            graph.add(Edge(segment_id, name, tail, head, length, seconds, points, stress=stress))
         if backward:
             graph.add(
-                Edge(segment_id, name, head, tail, length, seconds, list(reversed(points)))
+                Edge(
+                    segment_id, name, head, tail, length, seconds,
+                    list(reversed(points)), stress=stress,
+                )
             )
 
     graph.finalise()
     return graph
+
+
+class _FacilityIndex:
+    """Grid-bucketed lookup from a street segment to its bike facility.
+
+    A linear scan is fine for a handful of work zones and far too slow here:
+    a cross-town corridor is tens of thousands of centreline rows against
+    thousands of facility segments. Bucketing by rounded longitude/latitude
+    turns that into a handful of candidates per row.
+    """
+
+    CELL = 0.004  # roughly 400 m
+
+    def __init__(self, facilities):
+        self.cells: dict[tuple[int, int], list] = {}
+        for facility in facilities:
+            min_lon, min_lat, max_lon, max_lat = facility.box
+            for cx in range(int(min_lon / self.CELL), int(max_lon / self.CELL) + 1):
+                for cy in range(int(min_lat / self.CELL), int(max_lat / self.CELL) + 1):
+                    self.cells.setdefault((cx, cy), []).append(facility)
+
+    def lookup(self, points: list[geo.Point], name: str, *, tolerance_m: float = 15.0):
+        """Which bike facility, if any, belongs to this street segment.
+
+        Proximity alone is not enough, and the failure is not hypothetical.
+        Downtown, the I-35 mainlane sits 0.0 m from a service-road shared
+        lane and 11.9 m from the shared-use path, because that is simply
+        how a stacked urban freeway is built. Two guards:
+
+        * An **off-street** facility never credits a road segment. A trail
+          running beside a road does not make the road pleasant to ride.
+        * An **on-street** facility must agree on the street name whenever
+          both names are known. 65% of dedicated facilities carry one,
+          which is exactly the population at risk of a parallel-road match.
+        """
+        midpoint = points[len(points) // 2]
+        key = (int(midpoint[0] / self.CELL), int(midpoint[1] / self.CELL))
+
+        best = None
+        best_distance = tolerance_m
+        for facility in self.cells.get(key, ()):
+            if facility.line_type.startswith("Off-Street"):
+                continue
+            if name and facility.street and facility.street != name:
+                continue
+            distance = geo.path_to_path_m(points, facility.points, give_up_at=tolerance_m)
+            if distance < best_distance:
+                best, best_distance = facility, distance
+        return best
 
 
 def shortest_path(
@@ -165,7 +265,7 @@ def shortest_path(
             edge = graph.edges[index]
             if avoid_blocked and edge.blocked:
                 continue
-            candidate = cost + edge.seconds
+            candidate = cost + edge.seconds * edge.stress
             if candidate < best.get(edge.head, math.inf):
                 best[edge.head] = candidate
                 came[edge.head] = (node, index)
@@ -174,17 +274,22 @@ def shortest_path(
     if goal not in best:
         return None
 
+    # `best[goal]` is perceived cost, which is what Dijkstra had to minimise
+    # and what nobody should ever be shown. Re-walk the path to recover the
+    # real duration. In driving mode every stress is 1.0 and the two agree.
     indices: list[int] = []
     metres = 0.0
+    seconds = 0.0
     cursor = goal
     while cursor != start:
         previous, index = came[cursor]
         indices.append(index)
         metres += graph.edges[index].length_m
+        seconds += graph.edges[index].seconds
         cursor = previous
     indices.reverse()
 
-    return best[goal], metres, indices
+    return seconds, metres, indices
 
 
 def follow_route(

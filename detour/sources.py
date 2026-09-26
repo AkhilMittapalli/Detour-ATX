@@ -30,6 +30,7 @@ WORK_ZONES = "qyfh-gwei"
 SIGNALS = "5zpr-dehc"
 INCIDENTS = "dx9v-zd7x"
 CENTERLINE = "8hf2-pdmb"
+BIKE_FACILITIES = "23hw-a95n"
 
 CACHE_DIR = FsPath(__file__).resolve().parent.parent / ".cache"
 CACHE_TTL_S = 300
@@ -184,6 +185,32 @@ def fetch_active_incidents(**kw) -> list[dict]:
     for row in rows:
         row["_published"] = parse_ts(row.get("published_date"), naive_is_central=False)
     return rows
+
+
+BIKE_FIELDS = (
+    "the_geom,bicycle_facility,bike_level_of_comfort,line_type,"
+    "full_street_name,rec_bicycle_aaanetwork"
+)
+
+
+def fetch_bike_facilities_near(
+    box: tuple[float, float, float, float], **kw
+) -> list[dict]:
+    """Bike infrastructure inside a bounding box.
+
+    17,753 rows citywide, and the whole layer is an export of the
+    Comprehensive Transportation Network — two thirds of it is ordinary
+    street with a comfort rating attached. Filtering to real facilities is
+    `bike.index_facilities`'s job, not the server's, because the comfort
+    rating on an unrated street is still worth reading when we route.
+    """
+    min_lon, min_lat, max_lon, max_lat = box
+    params = {
+        "$select": BIKE_FIELDS,
+        "$where": f"within_box(the_geom, {max_lat}, {min_lon}, {min_lat}, {max_lon})",
+        "$limit": 20000,
+    }
+    return soda(BIKE_FACILITIES, params, **kw)
 
 
 def fetch_centerline_near(

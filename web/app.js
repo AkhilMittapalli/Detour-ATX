@@ -20,7 +20,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const state = { db: null, sample: null, routes: [], brief: null, busy: false,
-                map: null, raw: null, when: null };
+                map: null, raw: null, when: null, mode: 'drive' };
 
 /* ---------------------------------------------------------- capabilities */
 
@@ -119,7 +119,7 @@ function thin(points, spacing) {
   return kept;
 }
 
-async function planRoute(fromText, toText, note, { avoidTolls = false } = {}) {
+async function planRoute(fromText, toText, note, { avoidTolls = false, mode = 'drive' } = {}) {
   note('Looking up addresses');
   const [origin, destination] = await Promise.all([D.geocode(fromText), D.geocode(toText)]);
 
@@ -148,14 +148,35 @@ async function planRoute(fromText, toText, note, { avoidTolls = false } = {}) {
     E.padBbox(box, -300)
   );
 
-  const graph = E.buildGraph(centerline);
+  // The comfort layer is only fetched when someone is riding. A driver
+  // gains nothing from it and it is another 20,000 rows over the wire.
+  let facilities = [];
+  if (mode === 'bike') {
+    note('Loading bike infrastructure');
+    try {
+      facilities = E.indexFacilities(await D.fetchBikeFacilities(box));
+    } catch {
+      // Routing without the comfort layer still avoids freeways and still
+      // prefers quiet streets by speed limit. Degraded, not broken.
+      facilities = [];
+    }
+  }
+
+  const graph = E.buildGraph(centerline, { mode, facilities });
   const start = E.nearestNode(graph, origin.point);
   const goal = E.nearestNode(graph, destination.point);
 
   // Always route once with tolls allowed, so the cost of avoiding them can
   // be stated rather than merely asserted.
   const withTolls = start && goal && E.shortestPath(graph, start, goal, { avoidBlocked: false });
-  if (!withTolls) throw new Error('Could not find a road route between those addresses.');
+  if (!withTolls) {
+    throw new Error(mode === 'bike'
+      // Freeways are excluded from the bike network outright, so a corridor
+      // whose only link is a highway genuinely has no legal ride. Saying so
+      // beats handing someone a route along IH 35.
+      ? 'No legal cycling route connects those two addresses. The only links here are freeways, where bikes are prohibited.'
+      : 'Could not find a road route between those addresses.');
+  }
 
   let found = withTolls;
   let toll = { avoided: false, usesTolls: false, extraS: 0, extraM: 0 };
@@ -193,7 +214,8 @@ async function planRoute(fromText, toText, note, { avoidTolls = false } = {}) {
   state.map.showRoute(points, E.streetSequence(graph, found.indices));
 
   return {
-    origin, destination, graph, box, waypoints, toll,
+    origin, destination, graph, box, waypoints, toll, mode, facilities,
+    comfort: mode === 'bike' ? E.routeComfort(graph, found.indices) : null,
     path: E.densify(waypoints),
     line: points,
     via: E.streetSequence(graph, found.indices),
@@ -264,11 +286,26 @@ async function buildBrief(plan, note) {
     const seen = ids.map((id) => observations.get(id)).find(Boolean) || null;
 
     const verdict = E.scoreWorkZone(lead, now, seen);
-    const tier = E.combineTier(E.workZoneTier(lead), verdict);
+
+    /* On a bike, vehicle_impact is the wrong question. A closure the feed
+     * calls partial has taken the whole of a rider's lane if the lane it
+     * took was theirs, so the cyclist tier can only ever raise what the
+     * feed reported, never lower it. */
+    const bike = plan.mode === 'bike'
+      ? E.bikeImpact(lead, plan.facilities, MATCH.zone) : null;
+    const baseTier = bike ? Math.max(E.workZoneTier(lead), bike.tier) : E.workZoneTier(lead);
+    const tier = E.combineTier(baseTier, verdict);
 
     const road = (lead.road_names || 'this street').trim();
-    const impact = { 'all-lanes-closed': 'fully closed', 'some-lanes-closed': 'down to reduced lanes' }
-      [(lead.vehicle_impact || '').toLowerCase()] || 'affected by work';
+    /* "Down to reduced lanes" is a driver's sentence. On a bike, a lane
+     * taken out is a lane you were going to be overtaken in. */
+    const impact = plan.mode === 'bike'
+      ? ({ 'all-lanes-closed': 'fully closed',
+           'some-lanes-closed': 'narrowed, so traffic will squeeze past you' }
+         [(lead.vehicle_impact || '').toLowerCase()] || 'affected by work')
+      : ({ 'all-lanes-closed': 'fully closed',
+           'some-lanes-closed': 'down to reduced lanes' }
+         [(lead.vehicle_impact || '').toLowerCase()] || 'affected by work');
 
     const headings = [...new Set(group
       .map((g) => (g.row.direction || '').trim().toLowerCase())
@@ -279,14 +316,26 @@ async function buildBrief(plan, note) {
     if (lead.description) clauses.push(cleanDescription(lead.description));
     clauses.push(verdict.reasons.join('; '));
     if (E.affectsPedestrians(lead)) clauses.push('also closes a sidewalk, crossing or ramp');
+    if (bike) {
+      clauses.push(bike.note);
+      // The headline finding, said plainly at the point it matters: the
+      // city closed a bike lane and did not write that down anywhere.
+      if (!bike.saidSo) clauses.push('the permit does not say what this means for bikes');
+    }
     const activity = E.activityNote(lead, now);
     if (activity) clauses.push(activity);
 
     const id = lead.id;
     items.push({
-      kind: 'work_zone', id, tier, verdict,
+      kind: 'work_zone', id, tier, verdict, bike,
       zone: lead, shapes: group.map((g) => g.pts),
-      headline: `${road} ${impact}${heading ? `, ${heading}` : ''}`,
+      /* Compare the raw field, not the rendered phrase — the phrase is
+       * mode-dependent and a string match on it silently stops working the
+       * moment the wording changes. */
+      headline: bike && bike.separated
+                && (lead.vehicle_impact || '').toLowerCase() === 'some-lanes-closed'
+        ? `${road}: the ${bike.label} is closed`
+        : `${road} ${impact}${heading ? `, ${heading}` : ''}`,
       detail: clauses.filter(Boolean).join(' - '),
       raw: lead.description || '',
       distance: group[0].distance,
@@ -318,7 +367,9 @@ async function buildBrief(plan, note) {
       tier: E.TIER.BLOCKING,
       verdict: { level: E.CONFIDENCE.CONFIRMED, reasons: [] },
       headline: `${where} - signal flashing${onsetKnown && since ? ` for ${since}` : ''}`,
-      detail: 'The controller tripped its conflict monitor and fell back to flash. In Texas a flashing red is a stop, so treat it as a four-way stop.',
+      detail: plan.mode === 'bike'
+        ? 'The controller tripped its conflict monitor and fell back to flash. In Texas a flashing red is a stop, so treat it as a four-way stop — and expect that some drivers will not.'
+        : 'The controller tripped its conflict monitor and fell back to flash. In Texas a flashing red is a stop, so treat it as a four-way stop.',
       distance,
     });
   }
@@ -336,7 +387,7 @@ async function buildBrief(plan, note) {
       headline: telemetry.length === 1
         ? 'The city has lost its connection to 1 signal on your route'
         : `The city has lost its connection to ${telemetry.length} signals on your route`,
-      detail: `The lights themselves are fine. Each one runs its own timing from a cabinet at the intersection, and you will not notice anything driving through. What is missing is the link back to Austin's traffic centre, so engineers cannot check on these lights or retime them from the office if there is a crash nearby. ${shown}${more}.`,
+      detail: `The lights themselves are fine. Each one runs its own timing from a cabinet at the intersection, and you will not notice anything ${plan.mode === 'bike' ? 'riding' : 'driving'} through. What is missing is the link back to Austin's traffic centre, so engineers cannot check on these lights or retime them from the office if there is a crash nearby. ${shown}${more}.`,
       distance: Math.min(...telemetry.map((t) => t.distance)),
       members: telemetry.map((t) => t.id),
     });
@@ -367,7 +418,7 @@ async function buildBrief(plan, note) {
 
   return {
     plan, items, delta, now, when: now,
-    advice: recommend({ items, delta, zones, now, when: now }),
+    advice: recommend({ items, delta, zones, now, when: now, mode: plan.mode }),
     counts: { zones: zones.length, signals: signals.length, swept: swept.size },
   };
 }
@@ -405,7 +456,7 @@ function rescore(when) {
     ...state.brief,
     items,
     when,
-    advice: recommend({ items, delta: state.brief.delta, zones: raw.zones, now: raw.now, when }),
+    advice: recommend({ items, delta: state.brief.delta, zones: raw.zones, now: raw.now, when, mode: raw.plan.mode }),
   };
   renderBrief(state.brief);
   state.map.showDisruptions(
@@ -522,8 +573,41 @@ function renderBrief(brief) {
     </div>`;
   }
 
+  /* What a rider actually bought. The share on real infrastructure is the
+   * number that decides whether someone takes the ride at all, and the
+   * hostile-metres figure is the one no routing app will tell you. */
+  const comfort = plan.comfort;
+  if (plan.mode === 'bike' && comfort) {
+    const share = Math.round(comfort.facilityShare * 100);
+    const hostileMi = comfort.hostileMetres / 1609.344;
+    const rough = comfort.hostileMetres > 400;
+    html += `<div class="comfort${rough ? ' rough' : ''}">
+      <b>${share}%</b> of this ride is on bike infrastructure${
+        comfort.separatedShare > 0.05
+          ? `, ${Math.round(comfort.separatedShare * 100)}% of it physically separated` : ''
+      }. ${
+        rough
+          ? `About ${hostileMi.toFixed(1)} mi runs in traffic on faster roads with nothing set aside for you.`
+          : 'Nothing on it puts you in fast traffic without a lane.'
+      }</div>`;
+  }
+
+  /* The finding, stated where a rider will act on it. */
+  if (plan.mode === 'bike') {
+    const silent = items.filter((i) => i.bike && !i.bike.saidSo);
+    const separated = silent.filter((i) => i.bike.separated);
+    if (separated.length) {
+      html += `<div class="silence">${separated.length === 1
+        ? 'One closure on this route takes a separated bike lane or trail, and the permit never says so'
+        : `${separated.length} closures on this route take a separated bike lane or trail, and none of the permits say so`
+      }. The city files these as partial lane closures, which is true for a car.</div>`;
+    }
+  }
+
   const toll = plan.toll || {};
-  if (toll.impossible) {
+  if (plan.mode === 'bike') {
+    // Nothing to say: the bike network has no tolls in it by construction.
+  } else if (toll.impossible) {
     html += `<div class="tollnote warn">No toll-free route exists between these two
       addresses in the street data, so this route still uses a toll road.</div>`;
   } else if (toll.avoided) {
@@ -575,7 +659,7 @@ function renderBrief(brief) {
           <p>${esc(item.detail)}</p>
           ${item.kind === 'work_zone' ? `
             <div class="actions">
-              <span class="ask-q">Driven past it?</span>
+              <span class="ask-q">${plan.mode === 'bike' ? 'Ridden past it?' : 'Driven past it?'}</span>
               <button class="tiny" data-observe="${esc(item.id)}" data-claim="present">Still there</button>
               <button class="tiny" data-observe="${esc(item.id)}" data-claim="absent">Gone</button>
               ${state.sample && item.raw ? `<button class="tiny alt" data-explain="${esc(item.id)}">Explain simply</button>` : ''}
@@ -612,7 +696,7 @@ async function go(fromText, toText) {
 
   try {
     const plan = await planRoute(fromText, toText, note,
-                                 { avoidTolls: el('avoid-tolls').checked });
+                                 { avoidTolls: el('avoid-tolls').checked, mode: state.mode });
     const brief = await buildBrief(plan, note);
     state.brief = brief;
     renderBrief(brief);
@@ -714,6 +798,21 @@ document.addEventListener('click', async (event) => {
   }
 
   if (event.target.id === 'locate') { useMyLocation(); return; }
+  const modeBtn = event.target.closest('.mode');
+  if (modeBtn) {
+    state.mode = modeBtn.dataset.mode;
+    for (const button of document.querySelectorAll('.mode')) {
+      const on = button === modeBtn;
+      button.classList.toggle('on', on);
+      button.setAttribute('aria-checked', String(on));
+    }
+    // Avoiding tolls is a driver's question. Freeways and tollways are
+    // already off the bike network entirely, so the tickbox would be a
+    // control that does nothing.
+    el('avoid-tolls').closest('.check').hidden = state.mode === 'bike';
+    return;
+  }
+
   if (event.target.id === 'now') { el('leave-at').value = ''; return; }
   if (event.target.id === 'zin') { state.map.zoomIn(); return; }
   if (event.target.id === 'zout') { state.map.zoomOut(); return; }

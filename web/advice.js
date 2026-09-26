@@ -27,7 +27,14 @@ const fmtDay = (d) =>
 /* Rank matters: the first card is the one a reader acts on. */
 const PRIORITY = { act: 0, avoid: 1, timing: 2, ahead: 3, help: 4 };
 
-export function recommend({ items, delta, zones = [], now, when }) {
+/* Everything below has two voices. Not for flavour: a cyclist and a driver
+ * face genuinely different versions of the same closure. A driver in a
+ * narrowed lane waits. A rider in a narrowed lane is overtaken with less
+ * room than the law allows. Writing one set of advice for both would mean
+ * writing it for the driver, because that is who the feed was written for. */
+export function recommend({ items, delta, zones = [], now, when, mode = 'drive' }) {
+  const riding = mode === 'bike';
+  const pastVerb = riding ? 'ride past' : 'drive past';
   const out = [];
   const at = when || now;
 
@@ -52,25 +59,34 @@ export function recommend({ items, delta, zones = [], now, when }) {
       out.push({
         kind: 'avoid',
         title: `Go around via ${delta.via.slice(0, 3).join(', ')}`,
-        body: 'Derived by removing the closed block from the street network and routing again. Austin publishes the closure but never the detour, so this is computed, not official — follow posted signs where they differ.',
+        body: riding
+          ? 'Derived by removing the closed block and routing again, weighted for quiet streets and lanes rather than speed. Austin publishes the closure but never the detour, and it never signs one for bikes at all — so check the junctions before you commit.'
+          : 'Derived by removing the closed block from the street network and routing again. Austin publishes the closure but never the detour, so this is computed, not official — follow posted signs where they differ.',
       });
     }
   } else if (delta && delta.unreachable) {
     out.push({
       kind: 'act',
-      title: 'There may be no way through',
-      body: 'Every route around this closure is also cut in the data. Check posted signage before setting out, and allow for a long diversion.',
+      title: riding ? 'There may be no rideable way through' : 'There may be no way through',
+      body: riding
+        ? 'Every way around this closure is also cut, once freeways are excluded. A short walk with the bike may be the only link — check signage before setting out.'
+        : 'Every route around this closure is also cut in the data. Check posted signage before setting out, and allow for a long diversion.',
     });
   }
 
-  /* --- signals are a driving instruction, not a delay ------------------ */
+  /* --- signals are an instruction, not a delay ------------------------- */
   if (flashing.length) {
     out.push({
       kind: 'act',
       title: flashing.length > 1
         ? `Treat ${flashing.length} intersections as four-way stops`
         : 'Treat that flashing signal as a four-way stop',
-      body: 'In Texas a flashing red is a stop and a dark signal is an all-way stop. Most drivers do not know this, which is what makes these intersections dangerous rather than merely slow.',
+      /* The same legal fact, but the consequence is not the same. A driver
+       * who meets a driver rolling through has a collision; a rider has a
+       * hospital visit. Say the thing that changes what they do. */
+      body: riding
+        ? 'In Texas a flashing red is a stop and a dark signal is an all-way stop. Plenty of drivers do not know that and will roll straight through, so take the lane and make eye contact rather than assuming your right of way.'
+        : 'In Texas a flashing red is a stop and a dark signal is an all-way stop. Most drivers do not know this, which is what makes these intersections dangerous rather than merely slow.',
     });
   }
 
@@ -86,8 +102,12 @@ export function recommend({ items, delta, zones = [], now, when }) {
         ? 'Quieter before 7am or after 6pm'
         : 'No crews expected at this hour',
       body: plausibleNow
-        ? `${active.length} permit${active.length > 1 ? 's are' : ' is'} live on this route and crews keep roughly daytime hours on weekdays. The lane restrictions usually stay up, but the flaggers, trucks and stop-and-go do not.`
-        : 'Barricades and cones stay up outside working hours, so the road may still be narrowed — but you should not meet a crew, a flagger or a queue behind a truck.',
+        ? riding
+          ? `${active.length} permit${active.length > 1 ? 's are' : ' is'} live on this route and crews keep roughly daytime hours on weekdays. Cones and plated trenches stay put either way, but riding outside those hours means no flaggers waving you into traffic and no reversing trucks.`
+          : `${active.length} permit${active.length > 1 ? 's are' : ' is'} live on this route and crews keep roughly daytime hours on weekdays. The lane restrictions usually stay up, but the flaggers, trucks and stop-and-go do not.`
+        : riding
+          ? 'Barricades and cones stay up outside working hours, so a lane may still be taken — but you should not meet a crew or a flagger. Watch for loose gravel and steel plates left over the trench; they are worse on two wheels than on four.'
+          : 'Barricades and cones stay up outside working hours, so the road may still be narrowed — but you should not meet a crew, a flagger or a queue behind a truck.',
     });
   }
 
@@ -112,7 +132,7 @@ export function recommend({ items, delta, zones = [], now, when }) {
     out.push({
       kind: 'help',
       title: `${uncertain.length} of these may already be finished`,
-      body: 'Their own permit dates or notes suggest the work is done, but the city has verified a position on none of its work-zone records. If you drive past and the road is clear, tap Gone and the next person gets a better answer.',
+      body: `Their own permit dates or notes suggest the work is done, but the city has verified a position on none of its work-zone records. If you ${pastVerb} and the road is clear, tap Gone and the next person gets a better answer.`,
     });
   }
 

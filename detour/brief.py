@@ -6,7 +6,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 
 from . import confidence as conf
-from . import cluster, describe, graph as graph_mod, ledger, reroute, workcal
+from . import bike, cluster, describe, graph as graph_mod, ledger, reroute, workcal
 from . import route as rt, severity, sources, transit
 
 # Separator between the clauses a detail line accretes: the rewritten
@@ -101,6 +101,7 @@ def _work_zone_items(
     *,
     rewrite: bool,
     observations: dict | None = None,
+    facilities: list | None = None,
 ) -> list[Item]:
     grouped: dict[str, list[rt.Match]] = {}
     for match in matches:
@@ -134,11 +135,22 @@ def _work_zone_items(
         verdict = conf.score_work_zone(
             lead, now=now, observation=seen, agent_verdict=agent
         )
-        tier = severity.combine(severity.work_zone_tier(lead), verdict)
+        # On a bike the feed's own impact field is the wrong question, so
+        # the cyclist reading can raise the tier and never lower it.
+        impact = bike.zone_impact(lead, facilities) if facilities else None
+        base = severity.work_zone_tier(lead)
+        if impact is not None:
+            base = max(base, impact.tier)
+        tier = severity.combine(base, verdict)
 
         road = (lead.get("road_names") or "this street").strip()
         heading = _directions(zones)
-        headline = f"{road} {_impact_phrase(lead)}"
+        if impact is not None and impact.separated and (
+            lead.get("vehicle_impact") or ""
+        ).strip().lower() == "some-lanes-closed":
+            headline = f"{road}: the {impact.label} is closed"
+        else:
+            headline = f"{road} {_impact_phrase(lead)}"
         if heading:
             headline += f", {heading}"
         if lead.get("_end") and verdict.level is not conf.Confidence.PROBABLY_OVER:
@@ -155,6 +167,11 @@ def _work_zone_items(
 
         if severity.affects_pedestrians(lead):
             detail += " Footway affected: this one also closes a sidewalk, crossing or ramp."
+
+        if impact is not None:
+            detail += f" {impact.note}."
+            if not impact.said_so:
+                detail += " The permit does not say what this means for bikes."
 
         note = workcal.activity_note(lead, now)
         if note:
@@ -323,8 +340,15 @@ def build(
     use_cache: bool = True,
     with_detour: bool = True,
     with_transit: bool = True,
+    mode: str = "drive",
 ) -> Brief:
-    """Fetch every feed, join to the route, and assemble the brief."""
+    """Fetch every feed, join to the route, and assemble the brief.
+
+    `mode="bike"` reads the same closures as a cyclist. It does not change
+    which records are fetched, only what they are taken to mean: a permit
+    the feed files as a partial lane closure has taken the whole of a
+    rider's lane when the lane it took was theirs.
+    """
     now = now or sources.now_utc()
 
     zones = sources.fetch_work_zones(use_cache=use_cache)
@@ -335,12 +359,21 @@ def build(
     )
     observations = ledger.by_record()
 
+    facilities = []
+    if mode == "bike":
+        facilities = bike.index_facilities(
+            sources.fetch_bike_facilities_near(
+                geo_padded_bbox(route_obj), use_cache=use_cache
+            )
+        )
+
     items: list[Item] = []
     items += _work_zone_items(
         rt.match_work_zones(route_obj, zones),
         now,
         rewrite=rewrite,
         observations=observations,
+        facilities=facilities,
     )
     items += _signal_items(
         rt.match_signals(route_obj, signals),

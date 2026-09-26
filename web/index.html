@@ -80,6 +80,23 @@
 
   .extras{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:12px}
 
+  /* Two hard-edged tabs rather than a pill switch: this changes what the
+     whole briefing is about, not a display preference. */
+  .modes{display:flex;margin-top:16px;border:1px solid var(--rule-2)}
+  .mode{flex:1;background:transparent;border:0;color:var(--mute);padding:10px 12px;
+        font-size:11px;letter-spacing:.13em;text-transform:uppercase}
+  .mode + .mode{border-left:1px solid var(--rule-2)}
+  .mode:hover{color:var(--ink)}
+  .mode.on{background:var(--ink);color:var(--ground)}
+  .mode:focus-visible{outline:2px solid var(--blocking);outline-offset:-3px}
+
+  .comfort{margin-top:12px;padding:11px 13px;background:var(--surface);
+           border-left:3px solid var(--confirmed);font-size:14.5px}
+  .comfort.rough{border-left-color:var(--slowing)}
+  .comfort b{font-weight:600}
+  .silence{margin-top:12px;padding:11px 13px;background:var(--surface);
+           border-left:3px solid var(--blocking);font-size:14.5px}
+
   .options{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-top:14px}
   .check{display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;
          font-family:var(--body);font-size:15px;color:var(--ink);
@@ -401,6 +418,13 @@
                value="701 Brazos St" placeholder="Start typing an Austin address">
         <ul class="suggest" id="to-list" role="listbox" hidden></ul>
       </div>
+    </div>
+
+    <div class="modes" role="radiogroup" aria-label="How are you travelling?">
+      <button class="mode on" id="mode-drive" role="radio" aria-checked="true"
+              data-mode="drive" type="button">Driving</button>
+      <button class="mode" id="mode-bike" role="radio" aria-checked="false"
+              data-mode="bike" type="button">Cycling</button>
     </div>
 
     <button id="run">Check this route</button>
