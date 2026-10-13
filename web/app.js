@@ -633,6 +633,20 @@ function renderBrief(brief) {
       </div>`;
   }
 
+  /* The handoff. This product decides whether and which way; the app
+   * already on their home screen does turn-by-turn. Nobody has to choose
+   * between the two, which is the only version of this that gets used. */
+  const handoff = E.mapsHandoff(plan, delta);
+  if (handoff) {
+    html += `
+      <div class="handoff">
+        <a class="handoff-go" href="${esc(handoff.url)}" target="_blank" rel="noopener noreferrer">
+          Open in Google Maps${handoff.waypoints ? ' with this route' : ''}
+        </a>
+        ${handoff.caveat ? `<p class="handoff-note">${esc(handoff.caveat)}</p>` : ''}
+      </div>`;
+  }
+
   if (!items.length) {
     html += `<p class="empty">Nothing on this route is closed, flashing or under an active
       incident right now. Quiet is the normal state.</p>`;

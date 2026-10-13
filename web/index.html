@@ -90,6 +90,16 @@
   .mode.on{background:var(--ink);color:var(--ground)}
   .mode:focus-visible{outline:2px solid var(--blocking);outline-offset:-3px}
 
+  /* Deliberately not the loudest thing on the page. This is the exit, and
+     the briefing above it is the reason anyone came. */
+  .handoff{margin-top:14px}
+  .handoff-go{display:inline-block;font-family:var(--mono);font-size:11px;
+              letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
+              color:var(--ink);border:1px solid var(--ink);padding:10px 14px}
+  .handoff-go:hover{background:var(--ink);color:var(--ground)}
+  .handoff-go:focus-visible{outline:2px solid var(--blocking);outline-offset:2px}
+  .handoff-note{margin:7px 0 0;font-size:13px;color:var(--faint);max-width:52ch}
+
   .comfort{margin-top:12px;padding:11px 13px;background:var(--surface);
            border-left:3px solid var(--confirmed);font-size:14.5px}
   .comfort.rough{border-left-color:var(--slowing)}

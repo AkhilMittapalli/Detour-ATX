@@ -29,6 +29,12 @@ class Route:
     name: str
     waypoints: list[geo.Point]
     path: list[geo.Point]
+    # The saved file records the addresses the route was built from. They
+    # are not needed to route, but a brief that ends in a tappable Google
+    # Maps link reads far better with "701 Brazos St" than with a pair of
+    # coordinates, and the data is already sitting there.
+    origin: str = ""
+    destination: str = ""
 
     @property
     def length_m(self) -> float:
@@ -65,6 +71,8 @@ def load_route(path: str | FsPath) -> Route:
         name=data.get("name") or FsPath(path).stem,
         waypoints=waypoints,
         path=geo.densify(waypoints),
+        origin=(data.get("origin") or "").strip(),
+        destination=(data.get("destination") or "").strip(),
     )
 
 

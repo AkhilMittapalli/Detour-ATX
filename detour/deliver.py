@@ -16,7 +16,7 @@ import datetime as dt
 import html
 from pathlib import Path as FsPath
 
-from . import correspondent, severity, workcal
+from . import correspondent, handoff, severity, workcal
 
 INK = "#1A1917"
 MUTE = "#6A665E"
@@ -121,6 +121,28 @@ def render(brief, *, tell, held, reader: str = "you") -> str:
   <div style="font-family:{MONO};font-size:11.5px;color:{MUTE}">via {via}</div>
 </td></tr>"""
 
+    # The morning brief is the surface this product wins on - nobody opens
+    # a second map while driving, but they do read one message at 07:10 -
+    # so this is the line that turns information into a decision someone
+    # can act on without retyping two addresses.
+    handoff_block = ""
+    link = handoff.for_brief(brief)
+    if link is not None:
+        label = "Open in Google Maps" + (" with this route" if link.waypoints else "")
+        note = (
+            f'<div style="font-family:{FONT};font-size:12.5px;color:{FAINT};'
+            f'margin-top:7px">{_esc(link.caveat)}</div>'
+            if link.caveat else ""
+        )
+        handoff_block = f'''
+<tr><td style="padding:2px 0 18px 0">
+  <a href="{_esc(link.url)}"
+     style="display:inline-block;font-family:{MONO};font-size:11px;
+            letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
+            color:{INK};border:1px solid {INK};padding:10px 14px">{label}</a>
+  {note}
+</td></tr>'''
+
     held_block = ""
     if held:
         names = "<br>".join(f"&middot; {_esc(i.headline)}" for i, _ in held[:6])
@@ -160,6 +182,7 @@ def render(brief, *, tell, held, reader: str = "you") -> str:
 
     <tr><td style="padding-top:20px"></td></tr>
     {delta_block}
+    {handoff_block}
     {rows}
     {held_block}
 

@@ -150,6 +150,10 @@ class Delta:
     detour_s: float | None
     detour_turns: int | None
     via: list[str] = field(default_factory=list)
+    # The diversion as geometry, not just street names. Needed to hand the
+    # route to a mapping app as waypoints; a name like "S 1ST ST" geocodes
+    # anywhere along three miles of it.
+    detour_line: list[geo.Point] = field(default_factory=list)
     blockages: list[Blockage] = field(default_factory=list)
     unreachable: bool = False
     implausible: bool = False
@@ -299,6 +303,7 @@ def delta(
         detour_s=new_s,
         detour_turns=graph_mod.count_turns(graph, new_path),
         via=graph_mod.street_sequence(graph, new_path),
+        detour_line=graph_mod.path_geometry(graph, new_path),
         blockages=blockages,
         implausible=implausible,
         baseline_suspect=baseline_suspect,

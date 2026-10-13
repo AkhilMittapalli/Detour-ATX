@@ -335,6 +335,21 @@ def follow_route(
     return total_s, total_m, indices
 
 
+def path_geometry(graph: Graph, indices: list[int]) -> list[geo.Point]:
+    """Stitch a run of edges into one continuous polyline.
+
+    Consecutive edges share an endpoint, so the join is deduplicated — a
+    repeated vertex is harmless to draw and makes a mess of anything that
+    measures or samples the line afterwards.
+    """
+    out: list[geo.Point] = []
+    for index in indices:
+        for point in graph.edges[index].points:
+            if not out or geo.haversine_m(out[-1], point) > 1.0:
+                out.append(point)
+    return out
+
+
 def street_sequence(graph: Graph, indices: list[int]) -> list[str]:
     """Street names along a path, collapsing consecutive repeats."""
     names: list[str] = []

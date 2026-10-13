@@ -14,6 +14,7 @@ import os
 import sys
 
 from detour import brief as brief_mod
+from detour import handoff
 from detour import confidence as conf
 from detour import cluster, config, ledger, llm, plan, route as rt
 from detour import transport as tp
@@ -114,6 +115,16 @@ def render(result: brief_mod.Brief) -> str:
                     "dim",
                 )
             )
+        lines.append("")
+
+    # The handoff. This decides whether and which way; the app already on
+    # their phone does turn-by-turn, so nobody has to choose between them.
+    link = handoff.for_brief(result)
+    if link is not None:
+        lines.append(paint("  OPEN IN GOOGLE MAPS", "dim"))
+        lines.append(f"    {link.url}")
+        if link.caveat:
+            lines.append(paint(f"    {link.caveat}", "dim"))
         lines.append("")
 
     if delta is not None:

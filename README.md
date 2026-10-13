@@ -417,6 +417,58 @@ warns a rider of nothing.
 
 ---
 
+## Handing off to Google Maps
+
+There is no way to put anything inside the Maps app, and there never will
+be. But the two products answer different questions at different moments:
+
+| | Maps | This |
+|---|---|---|
+| **When** | In the car, engine running | Before you have decided to go |
+| **Question** | How do I get there now? | What should I know this week? |
+
+Nobody opens a second map while driving. They do read one message at
+07:10. So this decides *whether* and *which way*, and Maps does
+turn-by-turn — the user never chooses between them, which is the only
+version of this that gets used.
+
+Every brief ends in a Maps directions link, with the derived detour
+carried over as waypoints:
+
+```
+https://www.google.com/maps/dir/?api=1
+  &origin=1100+S+CONGRESS,+AUSTIN,+TX
+  &destination=701+BRAZOS+ST,+AUSTIN,+TX
+  &travelmode=driving
+  &waypoints=30.263952,-97.742870|30.267689,-97.741462|30.271434,-97.740091
+```
+
+The Maps URLs scheme is universal, needs no key and costs nothing.
+Origin and destination go in as text, because someone may read, share or
+save the link; waypoints go in as coordinates, because nobody reads those
+and a street name like `S 1ST ST` geocodes anywhere along three miles of
+it. Three waypoints, deliberately — each one is a constraint, and
+over-constraining makes Maps draw a rigid zigzag through points that were
+only ever samples of a line.
+
+In cycling mode the route is carried over even when nothing is closed.
+Maps has a bicycling mode and it does not know which lanes are shut or
+which roads are hostile; ours is weighted for comfort and excludes
+freeways outright.
+
+Two things this does **not** do. It does not hand over a detour the
+plausibility guard already rejected — we refuse to show those, and
+handing one to a navigation app is worse than not showing it. And it
+never fails a brief: the link is read defensively and returns nothing
+rather than raising, on the same principle as the transit layer, where a
+dead feed is not a reason for someone not to hear about a closed street.
+
+Maps may of course reroute around the waypoints if it disagrees. The
+button says so, which is consistent with what the project already says
+about every derived detour: computed, not official.
+
+---
+
 ## The work calendar
 
 This module exists because **the agent found it, not me**. Asked about a
@@ -540,6 +592,7 @@ detour/
   confidence.py   the confidence model, and why each verdict was reached
   severity.py     three tiers, and how confidence caps them
   bike.py         the cyclist view: comfort, re-tiering, cycling stress
+  handoff.py      the Google Maps link a brief ends in
   route.py        saved routes and the spatial join
   describe.py     permit narrative to one readable sentence
   graph.py        routable street graph, Dijkstra, route map-matching
@@ -568,7 +621,7 @@ dist/             the published dashboard (index.html + data.js)
 cli.py            terminal renderer, --audit, --bike, --confirm, --ledger,
                   --verify, --verify-route, --models, --json
 routes/           saved routes, traced from the centreline layer
-tests/            241 offline tests, no network, no API key
+tests/            261 offline tests, no network, no API key
 ```
 
 ## The dashboard

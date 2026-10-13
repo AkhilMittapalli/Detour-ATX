@@ -653,6 +653,110 @@ export const isPushable = (tier, verdict) =>
   tier === TIER.BLOCKING && verdict.level === CONFIDENCE.CONFIRMED;
 
 /* ======================================================================
+ * Handing off to the app people actually drive with
+ *
+ * There is no way to put anything inside Google Maps, and there never
+ * will be. But the two products answer different questions at different
+ * moments - Maps answers "how do I get there now", this answers "what
+ * should I know before I go" - so they do not have to compete for the
+ * same tap. This decides whether and which way; Maps does turn-by-turn.
+ *
+ * The Maps URLs scheme is universal, needs no key and costs nothing.
+ * Origin and destination go in as text because a person may later read,
+ * share or save the link. Waypoints go in as coordinates because nobody
+ * reads those and a street name like "S 1ST ST" geocodes anywhere along
+ * three miles of it.
+ * ====================================================================== */
+
+const MAPS_DIR = 'https://www.google.com/maps/dir/';
+
+/* Few on purpose. Each waypoint is a constraint, and over-constraining
+ * makes Maps draw a rigid zigzag through points that were only ever
+ * samples of a line. Three is enough to force the shape of a diversion. */
+const MAX_WAYPOINTS = 3;
+
+/* Evenly spaced along the path by distance, endpoints excluded - those
+ * are already the origin and destination. */
+export function sampleWaypoints(line, count = MAX_WAYPOINTS) {
+  if (!line || line.length < 3) return [];
+  const total = pathLength(line);
+  if (total <= 0) return [];
+
+  const wanted = [];
+  for (let i = 1; i <= count; i++) wanted.push((total * i) / (count + 1));
+
+  const out = [];
+  let walked = 0;
+  let next = 0;
+  for (let i = 1; i < line.length && next < wanted.length; i++) {
+    walked += haversine(line[i - 1], line[i]);
+    while (next < wanted.length && walked >= wanted[next]) {
+      out.push(line[i]);
+      next++;
+    }
+  }
+  return out;
+}
+
+/* A bare "lat,lng" pair. Maps parses that as a point, and only as long as
+ * nothing else is bolted onto it — appending the city turns a valid
+ * coordinate into a string that geocodes to nowhere. */
+const COORD_PAIR = /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/;
+
+const place = (text) => {
+  const value = String(text || '').trim();
+  if (!value || COORD_PAIR.test(value)) return value;
+  return /austin/i.test(value) ? value : `${value}, Austin, TX`;
+};
+
+const fixed = (point) => `${point[1].toFixed(6)},${point[0].toFixed(6)}`;
+
+/* Returns null when there is nothing worth handing over - which is most
+ * of the time, and saying so beats showing a button that does nothing
+ * the user could not already do from their home screen. */
+export function mapsHandoff(plan, delta) {
+  if (!plan || !plan.origin || !plan.destination) return null;
+
+  const riding = plan.mode === 'bike';
+  let line = null;
+  let why = '';
+
+  if (delta && delta.affected && !delta.implausible && delta.detourLine) {
+    line = delta.detourLine;
+    why = 'with the derived detour as waypoints';
+  } else if (riding && plan.line && plan.line.length > 2) {
+    /* Maps has a cycling mode, and it does not know which lanes are shut
+     * or which roads are hostile. Our route is weighted for comfort and
+     * excludes freeways outright, so it is worth carrying over even when
+     * nothing is closed. */
+    line = plan.line;
+    why = 'following the low-stress route';
+  }
+
+  const params = new URLSearchParams({
+    api: '1',
+    origin: place(plan.origin.address),
+    destination: place(plan.destination.address),
+    travelmode: riding ? 'bicycling' : 'driving',
+  });
+
+  const points = line ? sampleWaypoints(line) : [];
+  if (points.length) params.set('waypoints', points.map(fixed).join('|'));
+
+  return {
+    url: `${MAPS_DIR}?${params.toString()}`,
+    waypoints: points.length,
+    why,
+    /* Maps may well route around these if it disagrees. That is fine and
+     * it is what the product already says about every derived detour, so
+     * it is stated rather than hidden. */
+    caveat: points.length
+      ? 'Maps may reroute around these if it disagrees — follow posted signs where they differ.'
+      : '',
+  };
+}
+
+/* ======================================================================
  * The cyclist view
  *
  * Measured against the live feeds: 1,819 of 4,056 work zones sit within
