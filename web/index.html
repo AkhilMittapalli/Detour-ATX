@@ -102,7 +102,13 @@
     .wrap > header{grid-column:1 / -1;grid-row:1}
     #setup,#brief{grid-column:1;grid-row:2}
     #setup{position:sticky;top:16px}
-    #stage{grid-column:2;grid-row:2;position:sticky;top:16px}
+    /* A sticky grid item is bounded by the grid *container*, not by its
+       grid area — so sticking #stage itself let the map slide down the
+       page and sit on top of the explainer once you scrolled past the
+       briefing. Instead #stage stretches to fill its row and an inner
+       wrapper does the sticking, which bounds it to the row properly. */
+    #stage{grid-column:2;grid-row:2;align-self:stretch}
+    .stage-stick{position:sticky;top:16px}
     .why{order:0;grid-column:2;grid-row:2}
     .wrap:has(#stage:not([hidden])) .why{grid-column:1 / -1;grid-row:3}
   }
@@ -692,6 +698,7 @@
   </section>
 
   <section id="stage" hidden>
+   <div class="stage-stick">
     <div class="mapwrap">
       <canvas id="map" role="img"
         aria-label="Map of your route, showing closures and the detour around them"></canvas>
@@ -710,6 +717,7 @@
       <span class="key k-flash"><i></i>signal flashing</span>
       <span class="key k-telem"><i></i>city can&rsquo;t monitor</span>
     </div>
+   </div>
   </section>
 
   <section id="brief" hidden></section>
