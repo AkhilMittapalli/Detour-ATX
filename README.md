@@ -417,6 +417,52 @@ warns a rider of nothing.
 
 ---
 
+## Deploying the web app
+
+The browser app is a static folder with no build step, so hosting it is
+mostly a matter of pointing at `web/`. `vercel.json` at the repo root
+already does that.
+
+```bash
+npx vercel login
+npx vercel --prod
+```
+
+If Vercel does not pick up `outputDirectory`, set **Root Directory** to
+`web` in the project settings instead and delete the `outputDirectory`
+line — either route works, and the headers below apply in both.
+
+### What the headers do
+
+`Cache-Control: max-age=0, must-revalidate` on the JS and the page.
+Nothing here is content-hashed, so a long cache means someone keeps
+running last week's app after a deploy. This cost a confusing half hour
+during development, where a browser served a stale `advice.js` and made a
+correct fix look broken.
+
+`Permissions-Policy` keeps `geolocation=(self)` on purpose — the "use my
+location" button needs it. Camera, microphone and payment are off.
+
+`X-Frame-Options: SAMEORIGIN` blocks embedding from another domain. If
+you want this in an iframe on a portfolio site, that is the line to
+relax.
+
+### No backend, and no key
+
+Every Austin endpoint sends `Access-Control-Allow-Origin: *` and Socrata
+filters server-side by bounding box, so a route's worth of data is about
+a megabyte fetched straight from the browser. There is nothing to
+deploy but files, and no secret to leak: the city's geocoder and feeds
+are open, and the one model call in this project lives in the Python
+CLI, not here.
+
+Two features quietly switch off outside claude.ai, by design rather than
+by failure: saved routes and the plain-language rewrite both need
+runtime capabilities the open web does not have. The app checks for them
+and omits the controls instead of showing buttons that do nothing.
+
+---
+
 ## Three surfaces, one brief
 
 The product does not win by being opened. Nobody opens a second map while
