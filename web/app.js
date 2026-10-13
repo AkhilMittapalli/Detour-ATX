@@ -9,6 +9,7 @@ import * as E from './engine.js';
 import * as D from './data.js';
 import { createMap } from './map.js';
 import { recommend, planningOptions } from './advice.js';
+import * as CAL from './calendar.js';
 
 const CORRIDOR_PAD_M = 2000;
 const WAYPOINT_SPACING_M = 110;
@@ -18,6 +19,8 @@ const SUGGEST_DEBOUNCE_MS = 180;
 const el = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const timeText = (d) =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 const state = { db: null, sample: null, routes: [], brief: null, busy: false,
                 map: null, raw: null, when: null, mode: 'drive' };
@@ -637,14 +640,40 @@ function renderBrief(brief) {
    * already on their home screen does turn-by-turn. Nobody has to choose
    * between the two, which is the only version of this that gets used. */
   const handoff = E.mapsHandoff(plan, delta);
-  if (handoff) {
-    html += `
-      <div class="handoff">
-        <a class="handoff-go" href="${esc(handoff.url)}" target="_blank" rel="noopener noreferrer">
+
+  /* Two exits, side by side: one for leaving now, one for tomorrow.
+   *
+   * The calendar is the only honest way a page with no backend reaches
+   * you at 07:10 — nothing here can send an email tomorrow, and a
+   * calendar can. The alert fires before you leave rather than while you
+   * are already sitting in the closure. */
+  const departAt = chosenTime();
+  const moved = CAL.leaveBy(departAt, delta);
+
+  if (handoff || items.length) {
+    html += '<div class="handoff">';
+    if (moved) {
+      html += `<p class="leaveby">Leave by <b>${esc(timeText(moved))}</b> to arrive when you
+        normally would.</p>`;
+    }
+    html += '<div class="handoff-row">';
+    if (handoff) {
+      html += `<a class="handoff-go" href="${esc(handoff.url)}" target="_blank" rel="noopener noreferrer">
           Open in Google Maps${handoff.waypoints ? ' with this route' : ''}
-        </a>
-        ${handoff.caveat ? `<p class="handoff-note">${esc(handoff.caveat)}</p>` : ''}
-      </div>`;
+        </a>`;
+    }
+    if (items.length) {
+      html += `<button class="handoff-go alt" id="to-calendar" type="button">
+          Add to calendar</button>`;
+    }
+    html += '</div>';
+    if (handoff && handoff.caveat) {
+      html += `<p class="handoff-note">${esc(handoff.caveat)}</p>`;
+    }
+    html += `<p class="handoff-note">The calendar event alerts
+      ${CAL.ALARM_LEAD_MIN} minutes before you leave and carries the route with it, so the
+      briefing never has to be opened again.</p>`;
+    html += '</div>';
   }
 
   if (!items.length) {
@@ -824,6 +853,21 @@ document.addEventListener('click', async (event) => {
     // already off the bike network entirely, so the tickbox would be a
     // control that does nothing.
     el('avoid-tolls').closest('.check').hidden = state.mode === 'bike';
+    return;
+  }
+
+  if (event.target.id === 'to-calendar') {
+    const brief = state.brief;
+    if (!brief) return;
+    const link = E.mapsHandoff(brief.plan, brief.delta);
+    const event_ = CAL.eventFor(
+      { ...brief, deltaText: E.deltaSummary(brief.delta) },
+      { departAt: chosenTime(), mapsUrl: link ? link.url : '' }
+    );
+    if (!event_) return;
+    CAL.download(CAL.render([event_]));
+    event.target.textContent = 'Downloaded';
+    setTimeout(() => { event.target.textContent = 'Add to calendar'; }, 2500);
     return;
   }
 
