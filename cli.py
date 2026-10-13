@@ -64,7 +64,7 @@ def paint(text: str, key) -> str:
     return f"{ANSI[key]}{text}{ANSI['reset']}"
 
 
-def render(result: brief_mod.Brief) -> str:
+def render(result: brief_mod.Brief, *, mode: str = "drive") -> str:
     lines: list[str] = []
     local_hint = result.generated_at.strftime("%a %d %b %H:%M UTC")
 
@@ -121,7 +121,7 @@ def render(result: brief_mod.Brief) -> str:
 
     # The handoff. This decides whether and which way; the app already on
     # their phone does turn-by-turn, so nobody has to choose between them.
-    link = handoff.for_brief(result)
+    link = handoff.for_brief(result, mode=mode)
     if link is not None:
         lines.append(paint("  OPEN IN GOOGLE MAPS", "dim"))
         lines.append(f"    {link.url}")
@@ -765,7 +765,7 @@ def main() -> int:
         print(f"detour: {exc}", file=sys.stderr)
         return 1
 
-    print(json.dumps(as_dict(result), indent=2) if args.json else render(result))
+    print(json.dumps(as_dict(result), indent=2) if args.json else render(result, mode="bike" if args.bike else "drive"))
     return 0
 
 

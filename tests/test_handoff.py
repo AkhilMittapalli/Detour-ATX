@@ -140,6 +140,12 @@ class ForBrief(unittest.TestCase):
         self.assertTrue(origin.startswith("30."), origin)
         self.assertNotIn("Austin", origin)
 
+    def test_cycling_mode_reaches_the_url(self):
+        """Caught by running it: the CLI was asking Maps for driving
+        directions in --bike mode, because render() never took a mode."""
+        link = handoff.for_brief(FakeBrief(self.route()), mode="bike")
+        self.assertEqual(query(link.url)["travelmode"], "bicycling")
+
     def test_a_missing_route_yields_no_link_rather_than_an_error(self):
         self.assertIsNone(handoff.for_brief(FakeBrief(None)))
 
