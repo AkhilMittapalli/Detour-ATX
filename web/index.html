@@ -2,353 +2,572 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
 <style>
+  /* ============================================================ tokens
+     Three signals, kept apart on purpose so each one means a single thing:
+       orange  = something is wrong on your route   (--blocking, never a button)
+       blue    = something you can act on / the route itself  (--accent)
+       green   = the city has actually confirmed it  (--confirmed)
+     Ink/ground inversion marks a selection, the way a sign is read.
+     Barlow Condensed is kept for signage-style numerals and tier names, and
+     because map.js paints street labels with it on the canvas. */
   :root{
-    --ground:#EFEEEA; --surface:#FFFFFF; --panel:#E5E3DD;
-    --ink:#1A1917; --mute:#6A665E; --faint:#8D887F;
-    --rule:#D4D1CA; --rule-2:#B8B4AB;
-    --blocking:#D8471A; --slowing:#A97600; --background:#4E6575;
-    --confirmed:#2C6349; --over:#9A958C;
-    --map-bg:#E6E4DE; --map-street:#CBC8C0; --map-route:#3F5C6B;
+    color-scheme:light;
+    --ground:#EEF1F4; --surface:#FFFFFF; --panel:#E4E9EE;
+    --ink:#0B1015; --mute:#46525E; --faint:#5C6877;
+    --rule:#D6DCE2; --rule-2:#AEB8C2;
+    --blocking:#C03509; --slowing:#8A5E00; --background:#36596F;
+    --confirmed:#1C7450; --over:#64707D;
+    --accent:#0B5BD3; --accent-ink:#FFFFFF;
+    --grid:rgba(11,16,21,.045);
+    --shadow:0 1px 2px rgba(11,16,21,.05),0 10px 28px rgba(11,16,21,.07);
+    --map-bg:#E8ECF0; --map-street:#C9D1D9; --map-route:#0B5BD3;
+
     --display:"Barlow Condensed","Helvetica Neue",Arial,sans-serif;
-    --body:"Source Serif 4",Georgia,serif;
-    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --body:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --gutter:clamp(16px,5vw,40px);
+    --r:5px; --r-lg:10px;
+
+    /* Stroke icons, used only as CSS masks so they inherit currentColor and
+       need no extra markup or requests. */
+    --i-car:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 17v-5l2-5h12l2 5v5z'/%3E%3Cpath d='M4 12h16M7 17v2.5M17 17v2.5'/%3E%3C/svg%3E");
+    --i-bike:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='6' cy='16' r='3.5'/%3E%3Ccircle cx='18' cy='16' r='3.5'/%3E%3Cpath d='M6 16l3.5-7.5h5L18 16M9.5 8.5L12 16M7.5 8h3M14.5 8.5l-1.2-2.5H11.5'/%3E%3C/svg%3E");
+    --i-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h15M13 6l6 6-6 6'/%3E%3C/svg%3E");
+    --i-out:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17L17 7M8 7h9v9'/%3E%3C/svg%3E");
+    --i-pin:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.4'/%3E%3C/svg%3E");
+    --i-cal:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='5' width='16' height='15' rx='2'/%3E%3Cpath d='M4 10h16M8 3v4M16 3v4'/%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){
-      --ground:#17171A; --surface:#1E1E22; --panel:#242429;
-      --ink:#EBE8E2; --mute:#9C978D; --faint:#787369;
-      --rule:#33333A; --rule-2:#4A4A53;
-      --blocking:#FF7A4D; --slowing:#E0A93B; --background:#8AAABC;
-      --confirmed:#66B991; --over:#6C6862;
-      --map-bg:#1B1B1F; --map-street:#32323A; --map-route:#8FB3C4;
+      color-scheme:dark;
+      --ground:#080B0F; --surface:#0F1419; --panel:#151B22;
+      --ink:#E6EBF0; --mute:#9BA7B3; --faint:#7D8996;
+      --rule:#1E2730; --rule-2:#34414E;
+      --blocking:#FF6B3D; --slowing:#F0B03A; --background:#8DB4CF;
+      --confirmed:#4FCB93; --over:#7A8692;
+      --accent:#5AA9FF; --accent-ink:#04121F;
+      --grid:rgba(140,170,200,.05);
+      --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px rgba(0,0,0,.5);
+      --map-bg:#0B1015; --map-street:#202A34; --map-route:#5AA9FF;
     }
   }
   :root[data-theme="dark"]{
-    --ground:#17171A; --surface:#1E1E22; --panel:#242429;
-    --ink:#EBE8E2; --mute:#9C978D; --faint:#787369;
-    --rule:#33333A; --rule-2:#4A4A53;
-    --blocking:#FF7A4D; --slowing:#E0A93B; --background:#8AAABC;
-    --confirmed:#66B991; --over:#6C6862;
-    --map-bg:#1B1B1F; --map-street:#32323A; --map-route:#8FB3C4;
+    color-scheme:dark;
+    --ground:#080B0F; --surface:#0F1419; --panel:#151B22;
+    --ink:#E6EBF0; --mute:#9BA7B3; --faint:#7D8996;
+    --rule:#1E2730; --rule-2:#34414E;
+    --blocking:#FF6B3D; --slowing:#F0B03A; --background:#8DB4CF;
+    --confirmed:#4FCB93; --over:#7A8692;
+    --accent:#5AA9FF; --accent-ink:#04121F;
+    --grid:rgba(140,170,200,.05);
+    --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px rgba(0,0,0,.5);
+    --map-bg:#0B1015; --map-street:#202A34; --map-route:#5AA9FF;
   }
 
+  /* ============================================================ base */
   *{box-sizing:border-box}
-  body{background:var(--ground);color:var(--ink);font-family:var(--body);
-       font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:760px;margin:0 auto;padding-inline:var(--gutter);padding-block:0 72px}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);
+       font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;
+       text-rendering:optimizeLegibility}
+  ::selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
 
-  header{padding-block:36px 20px;border-bottom:2px solid var(--ink)}
-  .name{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;margin-bottom:9px}
-  h1{font-family:var(--display);font-size:clamp(32px,8vw,48px);font-weight:700;
-     letter-spacing:-.018em;line-height:.92;margin:0;text-transform:uppercase}
+  /* A survey grid that fades out by the fold: the page reads as a plotted
+     surface at the top and a plain document below it. */
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+               background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                                linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+               background-size:40px 40px;
+               -webkit-mask-image:linear-gradient(to bottom,#000,transparent 560px);
+               mask-image:linear-gradient(to bottom,#000,transparent 560px)}
+
+  /* One focus treatment for everything interactive. :where keeps specificity
+     at zero so a component can nudge the offset without a fight. */
+  :where(button,a,input,select,textarea,summary,[tabindex]):focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px}
+
+  .wrap{max-width:720px;margin:0 auto;padding-inline:var(--gutter);padding-block:0 72px;
+        display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:start}
+  .why{order:5}
+
+  /* Wide screens become a console: inputs and the briefing on the left,
+     the map pinned on the right. The map column is the same width in every
+     state, so map.js (which measures its parent once per fit) never has to
+     redraw because a sibling appeared or disappeared. */
+  @media (min-width:1000px){
+    .wrap{max-width:1240px;grid-template-columns:minmax(0,430px) minmax(0,1fr);
+          column-gap:36px;row-gap:28px}
+    .wrap > header{grid-column:1 / -1;grid-row:1}
+    #setup,#brief{grid-column:1;grid-row:2}
+    #setup{position:sticky;top:16px}
+    #stage{grid-column:2;grid-row:2;position:sticky;top:16px}
+    .why{order:0;grid-column:2;grid-row:2}
+    .wrap:has(#stage:not([hidden])) .why{grid-column:1 / -1;grid-row:3}
+  }
+
+  /* ============================================================ masthead */
+  header{padding-block:20px 34px;border-bottom:1px solid var(--rule-2);position:relative}
+  header::after{content:"";position:absolute;left:0;bottom:-1px;width:72px;height:3px;
+                background:var(--blocking)}
+  .name{display:flex;align-items:center;gap:12px;margin-bottom:clamp(30px,7vw,64px)}
+  .name::after{content:"City of Austin open data";margin-left:auto;
+               font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+               color:var(--mute);padding:7px 10px 7px 23px;border:1px solid var(--rule-2);
+               border-radius:var(--r);white-space:nowrap;
+               background:radial-gradient(circle at 11px 50%,var(--confirmed) 0 3px,transparent 3.5px) no-repeat}
+  h1{font-family:var(--display);font-size:clamp(26px,5vw,32px);font-weight:700;
+     letter-spacing:.03em;line-height:1;margin:0;text-transform:uppercase}
+  h1 .atx{color:var(--blocking);margin-left:.22em}
   .tag{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
-       color:var(--blocking);border:1px solid var(--blocking);padding:3px 7px}
-  .lede{margin:0;color:var(--mute);max-width:58ch}
+       color:var(--blocking);border:1px solid var(--blocking);padding:3px 7px;border-radius:3px}
 
-  /* ---------------------------------------------------------- setup */
-  #setup{padding-block:24px}
-  .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
-  label{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
-        text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  /* The thesis is the three-second test, so it is the largest thing on the
+     page. The first clause is dimmed so the eye lands on the claim. */
+  .lede{margin:0;color:var(--mute);max-width:62ch;font-size:clamp(15.5px,2.2vw,17px);line-height:1.6}
+  .thesis{display:block;max-width:21em;margin-bottom:20px;color:var(--ink);
+          font-size:clamp(30px,7vw,60px);font-weight:600;line-height:1.02;letter-spacing:-.04em;
+          text-wrap:balance}
+  .thesis .dim{color:var(--faint)}
+
+  /* The product's whole argument, shown once at the top as a legend: every
+     item gets one of these labels. */
+  .ladder{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:24px}
+  .ladder-label{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+                color:var(--faint);margin-right:6px}
+
+  /* Once a route is on screen the masthead steps back so the answer, not the
+     pitch, is what sits above the fold. */
+  .wrap:has(#stage:not([hidden])) .thesis{font-size:clamp(22px,3.4vw,34px);margin-bottom:12px;
+                                          letter-spacing:-.03em}
+  .wrap:has(#stage:not([hidden])) .name{margin-bottom:clamp(18px,3vw,28px)}
+  .wrap:has(#stage:not([hidden])) header{padding-bottom:24px}
+  .wrap:has(#stage:not([hidden])) .ladder{display:none}
+
+  .mark{display:inline-block;width:36px;height:36px;flex:0 0 auto}
+  .mark svg{width:100%;height:100%;display:block}
+  .m-plate{fill:none;stroke:var(--ink);stroke-width:2}
+  .m-road{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:square}
+  .m-closed{fill:none;stroke:var(--blocking);stroke-width:4;stroke-linecap:butt}
+  .m-detour{fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:square;
+            stroke-linejoin:miter;stroke-dasharray:4 3.4}
+
+  @media (max-width:520px){
+    .name::after{content:"Austin open data"}
+    .mark{width:32px;height:32px}
+    header{padding-block:16px 28px}
+  }
+
+  /* ============================================================ explainer */
+  .why-label{font:500 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+             color:var(--faint);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+  .why-label::after{content:"";flex:1;height:1px;background:var(--rule)}
+  .why-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+            counter-reset:why}
+  .why-grid > div{position:relative;counter-increment:why;background:var(--surface);
+                  border:1px solid var(--rule);border-radius:var(--r-lg);padding:18px 18px 20px;
+                  transition:border-color .2s ease}
+  .why-grid > div:hover{border-color:var(--rule-2)}
+  .why-grid > div::before{content:counter(why,decimal-leading-zero);display:block;
+                          font:500 11px/1 var(--mono);letter-spacing:.1em;color:var(--accent);
+                          margin-bottom:14px}
+  /* The third tile is the distinguishing idea, so it carries the green. */
+  .why-grid > div:nth-child(3){border-color:color-mix(in srgb,var(--confirmed) 40%,var(--rule));
+                               box-shadow:inset 0 2px 0 var(--confirmed)}
+  .why-grid > div:nth-child(3)::before{color:var(--confirmed)}
+  .why-grid h3{font-family:var(--body);font-size:16px;font-weight:600;line-height:1.3;
+               letter-spacing:-.012em;margin:0 0 7px;color:var(--ink)}
+  .why-grid p{margin:0;font-size:14px;line-height:1.58;color:var(--mute)}
+  .why-grid strong{color:var(--ink);font-weight:600}
+
+  /* ============================================================ console */
+  #setup{background:var(--surface);border:1px solid var(--rule-2);border-radius:var(--r-lg);
+         padding:18px 20px 20px;box-shadow:var(--shadow)}
+  #setup::before{content:"Route check";display:block;font:500 10.5px/1 var(--mono);
+                 letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+                 margin-bottom:16px;padding-bottom:13px;border-bottom:1px solid var(--rule)}
+  .row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+  label{display:block;font:500 10.5px/1 var(--mono);letter-spacing:.12em;
+        text-transform:uppercase;color:var(--faint);margin-bottom:8px}
   .combo{position:relative}
-  input{width:100%;font-family:var(--body);font-size:16px;color:var(--ink);
-        background:var(--surface);border:1px solid var(--rule-2);padding:11px 13px}
-  input:focus-visible{outline:2px solid var(--blocking);outline-offset:1px}
-  .field + .field{margin-top:12px}
+  input{width:100%;font-family:var(--body);font-size:16px;line-height:1.3;color:var(--ink);
+        background:var(--ground);border:1px solid var(--rule-2);border-radius:var(--r);
+        padding:12px 13px;transition:border-color .15s ease,background-color .15s ease}
+  input::placeholder{color:var(--faint)}
+  input:hover{border-color:var(--faint)}
+  input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .field + .field{margin-top:14px}
 
-  ul.suggest{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 3px);margin:0;
+  ul.suggest{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);margin:0;
              padding:4px;list-style:none;background:var(--surface);
-             border:1px solid var(--rule-2);box-shadow:0 8px 24px rgba(0,0,0,.14);
+             border:1px solid var(--rule-2);border-radius:var(--r-lg);box-shadow:var(--shadow);
              max-height:246px;overflow-y:auto}
-  ul.suggest li{padding:8px 10px;font-size:14.5px;cursor:pointer;line-height:1.35}
-  ul.suggest li:hover,ul.suggest li[aria-selected="true"]{background:var(--panel)}
+  ul.suggest li{padding:9px 10px;font-size:14.5px;cursor:pointer;line-height:1.35;
+                border-radius:var(--r)}
+  ul.suggest li:hover,ul.suggest li[aria-selected="true"]{
+    background:var(--panel);
+    background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
 
   button{font-family:var(--mono);cursor:pointer}
-  #swap{background:transparent;border:1px solid var(--rule-2);color:var(--mute);
-        width:40px;height:42px;font-size:15px;line-height:1}
+  #swap{background:var(--ground);border:1px solid var(--rule-2);border-radius:var(--r);
+        color:var(--mute);width:44px;height:46px;font-size:16px;line-height:1;
+        transition:border-color .15s ease,color .15s ease}
   #swap:hover{border-color:var(--ink);color:var(--ink)}
-  #run{margin-top:16px;width:100%;background:var(--blocking);color:#fff;border:0;
-       padding:13px;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+
+  /* The one primary action on the page: the only filled blue control. */
+  #run{margin-top:18px;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+       background:var(--accent);color:var(--accent-ink);border:0;border-radius:var(--r);
+       padding:16px;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+       transition:filter .15s ease,transform .1s ease}
+  #run::after{content:"";flex:none;width:15px;height:15px;background:currentColor;
+              -webkit-mask:var(--i-arrow) center/contain no-repeat;
+              mask:var(--i-arrow) center/contain no-repeat;transition:transform .2s ease}
+  #run:hover:not(:disabled){filter:brightness(1.1)}
+  #run:hover:not(:disabled)::after{transform:translateX(3px)}
+  #run:active:not(:disabled){transform:translateY(1px)}
   #run:disabled{opacity:.55;cursor:default}
-  .ghost{background:transparent;border:1px solid var(--rule-2);color:var(--mute);
-         padding:7px 12px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+
+  .ghost{background:transparent;border:1px solid var(--rule-2);border-radius:var(--r);
+         color:var(--mute);padding:8px 12px;font-size:10.5px;letter-spacing:.1em;
+         text-transform:uppercase;transition:border-color .15s ease,color .15s ease}
   .ghost:hover{border-color:var(--ink);color:var(--ink)}
   .ghost:disabled{opacity:.55;cursor:default}
 
-  .extras{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .extras{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
 
-  /* Two hard-edged tabs rather than a pill switch: this changes what the
-     whole briefing is about, not a display preference. */
-  .modes{display:flex;margin-top:16px;border:1px solid var(--rule-2)}
-  .mode{flex:1;background:transparent;border:0;color:var(--mute);padding:10px 12px;
-        font-size:11px;letter-spacing:.13em;text-transform:uppercase}
-  .mode + .mode{border-left:1px solid var(--rule-2)}
+  /* Mode is a switch of subject, not a display preference, so it reads as a
+     rigid two-position selector: a solid ink block slides to the chosen mode.
+     The :has() slider is progressive; without it .on fills the button. */
+  .modes{position:relative;isolation:isolate;display:grid;grid-template-columns:1fr 1fr;
+         margin-top:18px;padding:3px;background:var(--ground);
+         border:1px solid var(--rule-2);border-radius:var(--r)}
+  .mode{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:9px;
+        background:transparent;border:0;border-radius:3px;color:var(--mute);padding:11px 12px;
+        font-size:11.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;
+        transition:color .25s ease}
+  .mode::before{content:"";flex:none;width:17px;height:17px;background:currentColor;
+                -webkit-mask:var(--ico) center/contain no-repeat;
+                mask:var(--ico) center/contain no-repeat}
+  #mode-drive{--ico:var(--i-car)}
+  #mode-bike{--ico:var(--i-bike)}
   .mode:hover{color:var(--ink)}
-  .mode.on{background:var(--ink);color:var(--ground)}
-  .mode:focus-visible{outline:2px solid var(--blocking);outline-offset:-3px}
+  .mode.on,.mode.on:hover{background:var(--ink);color:var(--ground)}
+  .mode:focus-visible{outline-offset:1px}
+  @supports selector(:has(*)){
+    .modes::before{content:"";position:absolute;z-index:0;top:3px;bottom:3px;left:3px;
+                   width:calc(50% - 3px);background:var(--ink);border-radius:3px;
+                   transition:transform .3s cubic-bezier(.3,.85,.3,1)}
+    .modes:has(#mode-bike.on)::before{transform:translateX(100%)}
+    .mode.on,.mode.on:hover{background:transparent}
+  }
 
-  /* Deliberately not the loudest thing on the page. This is the exit, and
-     the briefing above it is the reason anyone came. */
-  .handoff{margin-top:14px}
-  .handoff-go{display:inline-block;font-family:var(--mono);font-size:11px;
-              letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
-              color:var(--ink);border:1px solid var(--ink);padding:10px 14px}
-  .handoff-go:hover{background:var(--ink);color:var(--ground)}
-  .handoff-go:focus-visible{outline:2px solid var(--blocking);outline-offset:2px}
-  .handoff-note{margin:7px 0 0;font-size:13px;color:var(--faint);max-width:52ch}
-
-  .comfort{margin-top:12px;padding:11px 13px;background:var(--surface);
-           border-left:3px solid var(--confirmed);font-size:14.5px}
-  .comfort.rough{border-left-color:var(--slowing)}
-  .comfort b{font-weight:600}
-  .silence{margin-top:12px;padding:11px 13px;background:var(--surface);
-           border-left:3px solid var(--blocking);font-size:14.5px}
-
-  .options{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-top:14px}
-  .check{display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;
+  .options{display:flex;gap:18px 24px;flex-wrap:wrap;align-items:flex-end;margin-top:16px}
+  .check{display:flex;align-items:center;gap:9px;cursor:pointer;margin:0;
          font-family:var(--body);font-size:15px;color:var(--ink);
-         letter-spacing:0;text-transform:none}
-  .check input{width:16px;height:16px;accent-color:var(--blocking);cursor:pointer;margin:0}
-  .whenpick label{margin-bottom:5px}
+         letter-spacing:0;text-transform:none;line-height:1.2}
+  .check input{width:17px;height:17px;accent-color:var(--accent);cursor:pointer;margin:0;padding:0}
+  .whenpick label{margin-bottom:6px}
   .whenpick input{font-family:var(--mono);font-size:13px;padding:8px 10px;width:auto;
                   color-scheme:light dark}
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]) .whenpick input{color-scheme:dark}
   }
-  #saved{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:14px}
-  .saved-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;
-               text-transform:uppercase;color:var(--faint)}
-  .chip-btn{background:transparent;border:1px solid var(--rule-2);color:var(--mute);
-            padding:5px 10px;font-size:11px}
+  :root[data-theme="dark"] .whenpick input{color-scheme:dark}
+  :root[data-theme="light"] .whenpick input{color-scheme:light}
+
+  #saved{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:16px}
+  .saved-label{font:500 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+               color:var(--faint)}
+  .chip-btn{background:transparent;border:1px solid var(--rule-2);border-radius:var(--r);
+            color:var(--mute);padding:6px 10px;font-size:11px;
+            transition:border-color .15s ease,color .15s ease}
   .chip-btn:hover{border-color:var(--ink);color:var(--ink)}
 
-  #status{font-family:var(--mono);font-size:12px;color:var(--mute);margin-top:14px;
-          display:flex;align-items:center;gap:8px}
-  #status::before{content:"";width:6px;height:6px;background:var(--blocking);
-                  animation:pulse 1.1s ease-in-out infinite}
+  /* Loading reads as a scan: a short blue bar travels a hairline rail. */
+  #status{position:relative;font:400 12px/1.4 var(--mono);color:var(--mute);margin:16px 0 0;
+          padding-bottom:12px;display:flex;align-items:center;gap:9px;overflow:hidden;
+          background:linear-gradient(var(--rule),var(--rule)) bottom/100% 2px no-repeat}
+  #status::before{content:"";flex:none;width:7px;height:7px;background:var(--accent);
+                  border-radius:1px;animation:pulse 1.1s ease-in-out infinite}
+  #status::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:28%;
+                 background:var(--accent);animation:scan 1.5s cubic-bezier(.5,0,.5,1) infinite}
   @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
-  #error{margin-top:14px;padding:11px 13px;border-left:3px solid var(--blocking);
-         background:var(--surface);font-size:15px}
+  @keyframes scan{from{transform:translateX(-100%)}to{transform:translateX(360%)}}
 
-  /* ------------------------------------------------------------ map */
-  #stage{margin-top:22px}
+  /* Notices share one shape: hairline box, a 3px tone bar down the left. An
+     inset shadow is used for the bar so the corners can stay rounded. */
+  #error,.tollnote,.comfort,.silence{
+    --tone:var(--background);
+    padding:12px 15px;background:var(--surface);border:1px solid var(--rule);
+    border-radius:var(--r);box-shadow:inset 3px 0 0 var(--tone);font-size:14.5px;line-height:1.55}
+  #error{--tone:var(--blocking);margin-top:16px;font-size:15px}
+
+  /* ============================================================ map */
+  #stage{animation:settle .4s ease backwards}
   .mapwrap{position:relative;background:var(--map-bg);border:1px solid var(--rule-2);
-           overflow:hidden}
+           border-radius:var(--r-lg) var(--r-lg) 0 0;overflow:hidden;box-shadow:var(--shadow)}
+  /* Registration ticks in the four corners: the frame of a plotted sheet. */
+  .mapwrap::before{content:"";position:absolute;inset:7px;z-index:1;pointer-events:none;opacity:.55;
+    --t:var(--faint);
+    background:
+      linear-gradient(var(--t),var(--t)) top left/13px 1px no-repeat,
+      linear-gradient(var(--t),var(--t)) top left/1px 13px no-repeat,
+      linear-gradient(var(--t),var(--t)) top right/13px 1px no-repeat,
+      linear-gradient(var(--t),var(--t)) top right/1px 13px no-repeat,
+      linear-gradient(var(--t),var(--t)) bottom left/13px 1px no-repeat,
+      linear-gradient(var(--t),var(--t)) bottom left/1px 13px no-repeat,
+      linear-gradient(var(--t),var(--t)) bottom right/13px 1px no-repeat,
+      linear-gradient(var(--t),var(--t)) bottom right/1px 13px no-repeat}
   canvas{display:block;width:100%;height:auto;cursor:grab;touch-action:none}
   canvas:active{cursor:grabbing}
 
-  /* Zoom controls sit on the map, squared off to match the signage feel of
-     the rest of the identity rather than the usual rounded map pill. */
-  .zoom{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:-1px}
-  .zoom button{width:32px;height:30px;background:var(--surface);color:var(--ink);
-               border:1px solid var(--rule-2);font-family:var(--mono);font-size:14px;
-               line-height:1;display:grid;place-items:center;padding:0}
+  .zoom{position:absolute;top:16px;right:16px;z-index:2;display:flex;flex-direction:column;
+        border-radius:var(--r);box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  .zoom button{width:34px;height:32px;background:var(--surface);color:var(--ink);
+               border:1px solid var(--rule-2);font-family:var(--mono);font-size:15px;
+               line-height:1;display:grid;place-items:center;padding:0;
+               transition:background-color .15s ease}
   .zoom button + button{margin-top:-1px}
-  .zoom button:last-child{font-size:9.5px;letter-spacing:.06em;height:26px}
+  .zoom button:first-child{border-radius:var(--r) var(--r) 0 0}
+  .zoom button:last-child{font-size:9.5px;font-weight:600;letter-spacing:.08em;height:28px;
+                          text-transform:uppercase;border-radius:0 0 var(--r) var(--r)}
   .zoom button:hover{background:var(--panel);border-color:var(--ink);z-index:1}
-  .zoom button:focus-visible{outline:2px solid var(--blocking);outline-offset:1px;z-index:2}
+  .zoom button:focus-visible{outline-offset:1px;z-index:2}
 
-  .maphint{position:absolute;left:10px;bottom:9px;font-family:var(--mono);font-size:9.5px;
-           letter-spacing:.05em;color:var(--faint);pointer-events:none;
-           background:var(--map-bg);padding:2px 6px}
-  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;
-          font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--faint)}
-  .key{display:flex;align-items:center;gap:6px}
-  .key i{width:16px;height:3px;display:inline-block}
-  .k-route i{background:var(--map-route)}
+  .maphint{position:absolute;left:16px;bottom:15px;z-index:2;font:400 10px/1.2 var(--mono);
+           letter-spacing:.05em;color:var(--mute);pointer-events:none;
+           background:var(--map-bg);background:color-mix(in srgb,var(--map-bg) 85%,transparent);
+           padding:4px 7px;border-radius:3px}
+
+  /* The legend docks to the map as one instrument rather than floating
+     below it as a caption. */
+  .legend{display:flex;gap:8px 18px;flex-wrap:wrap;padding:11px 14px;
+          background:var(--surface);border:1px solid var(--rule-2);border-top:0;
+          border-radius:0 0 var(--r-lg) var(--r-lg);
+          font:400 10.5px/1.2 var(--mono);letter-spacing:.05em;color:var(--mute)}
+  .key{display:flex;align-items:center;gap:7px}
+  .key i{width:16px;height:3px;display:inline-block;border-radius:1px}
+  .k-route i{background:var(--map-route);height:3px}
   .k-closed i{background:var(--blocking);height:4px}
   .k-detour i{background:repeating-linear-gradient(90deg,var(--map-route) 0 5px,transparent 5px 9px)}
   .k-over i{background:repeating-linear-gradient(90deg,var(--over) 0 4px,transparent 4px 8px)}
-
-  /* Signal keys are drawn as rings, matching the map, so the two are
-     obviously the same symbol at the same visual weight. */
+  /* Signal keys are drawn as rings, matching the map symbol for symbol. */
   .k-flash i,.k-telem i{height:auto;width:auto;border-radius:50%;background:none}
   .k-flash i{width:11px;height:11px;border:2px solid var(--blocking)}
-  .k-telem i{width:7px;height:7px;border:1px solid var(--slowing);opacity:.6}
+  .k-telem i{width:7px;height:7px;border:1px solid var(--slowing);opacity:.7}
+  @media (max-width:560px){ .legend{gap:8px 14px} .maphint{display:none} }
 
+  /* ============================================================ briefing */
+  .brief-head{display:flex;justify-content:space-between;align-items:flex-start;
+              gap:14px;flex-wrap:wrap;padding-block:0 8px}
+  .summary{display:flex;align-items:center;gap:11px;font-family:var(--display);
+           font-size:clamp(26px,5vw,34px);font-weight:700;line-height:1;letter-spacing:.015em;
+           text-transform:uppercase;color:var(--background);margin-bottom:9px}
+  .summary::before{content:"";flex:none;width:11px;height:11px;border-radius:2px;
+                   background:currentColor}
+  .summary.hot{color:var(--blocking)}
+  .sub,.via{font:400 11.5px/1.6 var(--mono);color:var(--mute);letter-spacing:.01em}
+  .via{padding-bottom:16px;border-bottom:1px solid var(--rule);margin-top:4px}
 
-  /* ------------------------------------------------- brand
-     The mark is the product in one glyph: a route runs up the plate, is cut
-     by a bar, and leaves by another way. Squared plate, no rounding to speak
-     of, because the reference is a regulatory sign rather than an app icon. */
-  .mark{display:inline-block;width:40px;height:40px;flex:0 0 auto}
-  .mark svg{width:100%;height:100%;display:block}
-  .m-plate{fill:none;stroke:var(--ink);stroke-width:2}
-  .m-road{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:square}
-  .m-closed{fill:none;stroke:var(--blocking);stroke-width:4;stroke-linecap:butt}
-  .m-detour{fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:square;
-            stroke-linejoin:miter;stroke-dasharray:4 3.4;opacity:.75}
-  h1 .atx{color:var(--blocking);margin-left:.14em}
-
-  /* ------------------------------------------------- why this exists */
-  .why{padding-block:26px 4px;border-bottom:1px solid var(--rule)}
-  .why-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
-             text-transform:uppercase;color:var(--faint);margin-bottom:16px}
-  .why-grid{display:grid;gap:20px 30px;grid-template-columns:repeat(auto-fit,minmax(248px,1fr))}
-  .why-grid h3{font-family:var(--body);font-size:15.5px;font-weight:600;line-height:1.35;
-               margin:0 0 5px;color:var(--ink)}
-  .why-grid p{margin:0;font-size:14.5px;line-height:1.55;color:var(--mute)}
-
-  /* ------------------------------------------------- planning */
-  .plan{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-block:18px 4px}
-  .plan-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;
-              text-transform:uppercase;color:var(--faint)}
-  .plan-btn{background:transparent;border:1px solid var(--rule-2);color:var(--mute);
-            padding:5px 11px;font-size:11px;letter-spacing:.04em}
+  .plan{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-block:16px 4px}
+  .plan-label{font:500 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+              color:var(--faint);margin-right:2px}
+  .plan-btn{background:transparent;border:1px solid var(--rule-2);border-radius:var(--r);
+            color:var(--mute);padding:6px 11px;font-size:11px;letter-spacing:.03em;
+            transition:border-color .15s ease,color .15s ease}
   .plan-btn:hover{border-color:var(--ink);color:var(--ink)}
   .plan-btn.on{background:var(--ink);border-color:var(--ink);color:var(--ground)}
 
-  /* ------------------------------------------------- advice
-     The recommendations sit above the item list because that is the order a
-     reader needs them in: what to do first, what it is based on second. */
-  .advice{margin-block:16px 22px;border:1px solid var(--rule-2);background:var(--surface)}
-  .advice-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
-                text-transform:uppercase;color:var(--ground);background:var(--ink);
-                padding:6px 14px}
-  .rec{padding:13px 16px 14px;border-top:1px solid var(--rule);
-       display:grid;grid-template-columns:auto 1fr;gap:0 11px}
+  /* Recommendations sit above the evidence: what to do first, what it is
+     based on second. */
+  .advice{margin-block:16px 20px;border:1px solid var(--rule-2);border-radius:var(--r-lg);
+          background:var(--surface);overflow:hidden;box-shadow:var(--shadow)}
+  .advice-label{font:500 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+                color:var(--ground);background:var(--ink);padding:9px 16px}
+  .rec{padding:14px 16px 15px;border-top:1px solid var(--rule);
+       display:grid;grid-template-columns:auto 1fr;gap:0 12px}
   .rec:first-of-type{border-top:0}
   .rec::before{content:"";width:9px;height:9px;margin-top:6px;
                border:2px solid var(--background);border-radius:50%}
-  .rec.r-act::before{background:var(--blocking);border-color:var(--blocking);border-radius:0}
-  .rec.r-avoid::before{border-color:var(--blocking);background:transparent;border-radius:0;
+  .rec.r-act::before{background:var(--blocking);border-color:var(--blocking);border-radius:1px}
+  .rec.r-avoid::before{border-color:var(--blocking);background:transparent;border-radius:1px;
                        transform:rotate(45deg)}
   .rec.r-timing::before{border-color:var(--slowing)}
   .rec.r-ahead::before{border-color:var(--confirmed);background:var(--confirmed)}
   .rec.r-help::before{border-style:dashed;border-color:var(--over)}
-  .rec h4{grid-column:2;font-family:var(--body);font-size:16px;font-weight:600;
-          line-height:1.35;margin:0 0 4px}
-  .rec p{grid-column:2;margin:0;font-size:14.5px;line-height:1.55;color:var(--mute)}
+  .rec h4{grid-column:2;font-family:var(--body);font-size:15.5px;font-weight:600;
+          line-height:1.35;letter-spacing:-.008em;margin:0 0 4px}
+  .rec p{grid-column:2;margin:0;font-size:14px;line-height:1.58;color:var(--mute)}
 
-  @media (max-width:520px){
-    .mark{width:34px;height:34px}
-    .why-grid{gap:16px}
-  }
+  .tollnote{margin-block:16px 0;color:var(--mute)}
+  .tollnote.warn{--tone:var(--slowing);color:var(--ink)}
 
-  /* ---------------------------------------------------------- brief */
-  .brief-head{display:flex;justify-content:space-between;align-items:flex-start;
-              gap:14px;flex-wrap:wrap;padding-block:24px 6px}
-  .summary{font-family:var(--display);font-size:clamp(22px,4.5vw,30px);font-weight:700;
-           line-height:1.1;color:var(--background)}
-  .summary.hot{color:var(--blocking)}
-  .sub,.via{font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.6}
-  .via{padding-bottom:18px;border-bottom:1px solid var(--rule)}
+  /* Comfort and silence are readouts. The number is set in the display face
+     so a rider can take it in at a glance; each panel names itself. */
+  .comfort{--tone:var(--confirmed);margin-top:14px}
+  .comfort.rough{--tone:var(--slowing)}
+  .comfort::before,.silence::before{display:block;margin-bottom:7px;
+        font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--tone)}
+  .comfort::before{content:"Ride comfort"}
+  .comfort b{font-family:var(--display);font-size:1.95em;font-weight:700;line-height:.9;
+             letter-spacing:.01em;color:var(--tone);margin-right:.08em;vertical-align:-.06em}
+  .comfort.rough b{color:var(--ink)}
+  .silence{--tone:var(--blocking);margin-top:14px;
+           background:color-mix(in srgb,var(--blocking) 6%,var(--surface))}
+  .silence::before{content:"Finding \00B7  what the permit leaves out"}
 
   /* The route-impact callout borrows the barricade's own edge: a hazard
-     stripe run along the top, the way a closure's warning bar is the first
-     thing you actually see on the street. */
-  .tollnote{margin-block:16px 0;padding:10px 13px;background:var(--surface);
-            border-left:3px solid var(--background);font-size:14.5px;color:var(--mute)}
-  .tollnote.warn{border-left-color:var(--slowing);color:var(--ink)}
-
-  .impact{margin-block:20px;padding:16px 16px 15px;border:1px solid var(--rule-2);
-          position:relative;overflow:hidden;
+     stripe along the top, the first thing you see on the street. */
+  .impact{margin-block:20px;padding:18px 17px 16px;border:1px solid var(--rule-2);
+          border-radius:var(--r-lg);position:relative;overflow:hidden;
           background:var(--panel);
-          background:color-mix(in srgb, var(--blocking) 7%, var(--surface))}
+          background:color-mix(in srgb,var(--blocking) 7%,var(--surface))}
   .impact::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;
                   background:repeating-linear-gradient(135deg,
-                    var(--blocking) 0 7px, var(--ink) 7px 14px)}
-  .impact-label{font-family:var(--mono);font-size:10px;letter-spacing:.13em;
-                text-transform:uppercase;color:var(--blocking);margin:4px 0 7px;font-weight:600}
-  .impact-line{font-size:17.5px;font-weight:600;line-height:1.32}
-  .impact-via{font-family:var(--mono);font-size:11.5px;color:var(--mute);margin-top:6px}
+                    var(--blocking) 0 7px,var(--ink) 7px 14px)}
+  .impact-label{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+                color:var(--blocking);margin:3px 0 9px}
+  .impact-line{font-size:18px;font-weight:600;line-height:1.3;letter-spacing:-.015em}
+  .impact-via{font:400 11.5px/1.5 var(--mono);color:var(--mute);margin-top:8px}
 
-  /* Tier headers get a small signage glyph instead of just a colour word -
-     triangle / diamond / dot, echoing warning-sign shapes at a glance. */
-  .tier{display:flex;gap:9px;align-items:center;flex-wrap:wrap;
-        font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:.14em;
-        text-transform:uppercase;margin:30px 0 12px;padding-top:11px;
+  /* ============================================================ exits
+     The two ways out. The briefing is why anyone came, so these stay
+     smaller than the run button, but they are solid, large touch targets:
+     one filled (leave to the maps app), one outlined (come back tomorrow). */
+  .handoff{margin-top:20px;padding:16px;background:var(--surface);border:1px solid var(--rule);
+           border-radius:var(--r-lg)}
+  .handoff-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:8px}
+  .leaveby{margin:0 0 14px;font-size:15.5px;line-height:1.45}
+  .leaveby b{font:600 .92em var(--mono);color:var(--blocking);padding:2px 7px;border-radius:3px;
+             background:color-mix(in srgb,var(--blocking) 11%,transparent);white-space:nowrap}
+  .handoff-go{display:inline-flex;align-items:center;justify-content:center;gap:9px;
+              min-height:46px;font:500 11px/1.3 var(--mono);letter-spacing:.1em;
+              text-transform:uppercase;text-decoration:none;text-align:center;
+              color:var(--ground);background:var(--ink);border:1px solid var(--ink);
+              border-radius:var(--r);padding:11px 14px;
+              transition:background-color .15s ease,color .15s ease,border-color .15s ease}
+  .handoff-go::before,a.handoff-go::after{content:"";flex:none;width:16px;height:16px;
+        background:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;
+        mask:var(--ico) center/contain no-repeat}
+  .handoff-go::before{--ico:var(--i-pin)}
+  a.handoff-go::after{--ico:var(--i-out);width:13px;height:13px;opacity:.75}
+  .handoff-go:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  .handoff-go.alt{background:transparent;color:var(--ink);border-color:var(--rule-2);cursor:pointer}
+  .handoff-go.alt::before{--ico:var(--i-cal)}
+  .handoff-go.alt:hover{border-color:var(--ink);background:var(--ink);color:var(--ground)}
+  .handoff-note{margin:10px 0 0;font-size:12.5px;line-height:1.55;color:var(--faint);max-width:54ch}
+
+  /* ============================================================ items
+     Tier headers use signage glyphs (triangle / diamond / dot), so severity
+     survives colour-blindness and a glance from across the room. */
+  .tier{position:relative;display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+        font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:.14em;
+        text-transform:uppercase;margin:32px 0 12px;padding-top:13px;
         border-top:1px solid var(--rule)}
-  .tier::before{content:"";flex:none;width:9px;height:9px}
+  .tier::after{content:"";position:absolute;left:0;top:-1px;width:44px;height:2px;
+               background:currentColor}
+  .tier::before{content:"";flex:none;width:10px;height:10px}
   .tier.t2{color:var(--blocking)}
   .tier.t2::before{background:var(--blocking);clip-path:polygon(50% 2%,100% 98%,0 98%)}
   .tier.t1{color:var(--slowing)}
-  .tier.t1::before{background:var(--slowing);border-radius:1px;transform:rotate(45deg)}
+  .tier.t1::before{background:var(--slowing);border-radius:1px;transform:rotate(45deg) scale(.85)}
   .tier.t0{color:var(--background)}
   .tier.t0::before{background:var(--background);border-radius:50%}
-  .ask{font-family:var(--mono);font-size:10px;font-weight:400;letter-spacing:.08em;
-       text-transform:none;color:var(--faint)}
+  .ask{font:400 10.5px/1.3 var(--mono);letter-spacing:.06em;text-transform:none;color:var(--mute)}
 
-  /* Cards: the stripe carries the tier colour, but only the loud tier
-     (Blocking) gets the hazard-tape treatment - the one colour allowed to
-     alarm anyone gets the one texture that means "look here." A faint tier
-     tint on the card body helps a 7am scan sort hot from quiet without
-     reading a word. */
-  .item{display:grid;grid-template-columns:7px 1fr;background:var(--surface);
-        border:1px solid var(--rule);margin-bottom:11px;
-        transition:border-color .14s ease,transform .14s ease,box-shadow .14s ease}
-  .item:hover{border-color:var(--rule-2);transform:translateX(3px)}
+  /* A card is a readout with a coloured bezel. Only Blocking gets the hazard
+     tape: the one colour allowed to alarm anyone gets the one texture that
+     means look here. */
+  .item{display:grid;grid-template-columns:6px 1fr;background:var(--surface);
+        border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-bottom:10px;
+        transition:border-color .15s ease,transform .15s ease,box-shadow .15s ease;
+        animation:rise .34s cubic-bezier(.2,.7,.2,1) backwards}
+  .item:nth-of-type(2){animation-delay:.05s}
+  .item:nth-of-type(3){animation-delay:.1s}
+  .item:nth-of-type(n+4){animation-delay:.15s}
+  .item:hover{border-color:var(--rule-2);transform:translateX(2px);box-shadow:var(--shadow)}
   .item:hover .stripe{filter:brightness(1.2)}
-  .item.t2{background:var(--surface);background:color-mix(in srgb, var(--blocking) 6%, var(--surface))}
-  .item.t1{background:var(--surface);background:color-mix(in srgb, var(--slowing) 5%, var(--surface))}
+  .item.t2{background:var(--surface);background:color-mix(in srgb,var(--blocking) 6%,var(--surface))}
+  .item.t1{background:var(--surface);background:color-mix(in srgb,var(--slowing) 5%,var(--surface))}
   .item.t2 .stripe{background:var(--blocking);
-                    background:repeating-linear-gradient(135deg,
-                      var(--blocking) 0 6px, var(--ink) 6px 12px)}
+                   background:repeating-linear-gradient(135deg,
+                     var(--blocking) 0 6px,var(--ink) 6px 12px)}
   .item.t1 .stripe{background:var(--slowing)}
   .item.t0 .stripe{background:var(--background)}
 
-  /* Low-confidence items fade rather than shout: dashed edge, a hatched
-     stripe instead of a solid one, softer text. The honesty is visible,
-     not just stated in a chip. */
+  /* Low-confidence items fade rather than shout: dashed edge, hatched
+     stripe, softer type. The honesty is visible, not just stated. */
   .item.conf-probably-over{border-style:dashed}
   .item.conf-probably-over .stripe{background:repeating-linear-gradient(135deg,
-                      var(--over) 0 5px, transparent 5px 10px)}
+                      var(--over) 0 5px,transparent 5px 10px)}
   .item.conf-probably-over h3{color:var(--mute)}
   .item.conf-probably-over p{color:var(--faint)}
 
-  .item .body{padding:14px 17px 16px}
-  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
-  .chip{display:inline-flex;align-items:center;gap:5px;line-height:1.4;
-        font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;
-        padding:3px 8px 3px 7px;border:1px solid currentColor}
-  .chip::before{content:"";flex:none;width:6px;height:6px;background:currentColor;border-radius:50%}
-  /* Confidence made literal: a filled dot is certain, a ring is unverified,
-     a dashed ring is fading, a flag is a person, not a sensor. */
+  .item .body{padding:14px 16px 16px;min-width:0}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+
+  /* Confidence as a three-segment gauge. All three lit is Confirmed, two is
+     Reported, one is Probably over; the chip fill, border and card edge say
+     the same thing a second way. */
+  .chip{--on:currentColor;--off:color-mix(in srgb,currentColor 24%,transparent);
+        --b1:var(--on);--b2:var(--on);--b3:var(--on);
+        display:inline-flex;align-items:center;gap:7px;line-height:1;
+        font:500 9.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+        padding:5px 8px 5px 7px;border:1px solid currentColor;border-radius:3px}
+  .chip::before{content:"";flex:none;width:12px;height:8px;
+                background:linear-gradient(90deg,
+                  var(--b1) 0 3px,transparent 3px 4.5px,
+                  var(--b2) 4.5px 7.5px,transparent 7.5px 9px,
+                  var(--b3) 9px 12px)}
   .c-confirmed{color:var(--ground);font-weight:600;border-color:var(--confirmed);
                background:var(--confirmed)}
-  .c-confirmed::before{background:var(--ground)}
-  .c-reported{color:var(--background)}
-  .c-reported::before{background:transparent;border:1.5px solid currentColor;
-                       width:5px;height:5px}
-  .c-probably-over{color:var(--over);border-style:dashed}
-  .c-probably-over::before{background:transparent;border:1px dashed currentColor}
+  .c-reported{color:var(--background);--b3:var(--off)}
+  .c-probably-over{color:var(--over);border-style:dashed;--b2:var(--off);--b3:var(--off)}
+  /* A resident's report is a person, not a sensor: a flag rather than a gauge. */
   .c-you{color:var(--blocking)}
-  .c-you::before{width:0;height:0;border-radius:0;background:transparent;
+  .c-you::before{width:0;height:0;border-radius:0;background:none;
                  border-left:4px solid transparent;border-right:4px solid transparent;
-                 border-bottom:6px solid currentColor}
-  .item h3{font-family:var(--body);font-size:16.5px;font-weight:600;line-height:1.36;margin:0 0 6px}
-  .item p{margin:0;font-size:14.5px;color:var(--mute);line-height:1.56}
+                 border-bottom:7px solid currentColor}
+  .item h3{font-family:var(--body);font-size:16.5px;font-weight:600;line-height:1.32;
+           letter-spacing:-.012em;margin:0 0 6px}
+  .item p{margin:0;font-size:14px;color:var(--mute);line-height:1.58}
 
-  .actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:12px}
-  .ask-q{font-family:var(--mono);font-size:10px;letter-spacing:.07em;color:var(--faint)}
-  .tiny{background:transparent;border:1px solid var(--rule-2);color:var(--mute);
-        padding:4px 9px;font-size:10.5px}
+  .actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:13px}
+  .ask-q{font:400 10px/1 var(--mono);letter-spacing:.06em;color:var(--faint)}
+  .tiny{background:transparent;border:1px solid var(--rule-2);border-radius:var(--r);
+        color:var(--mute);padding:5px 10px;font-size:10.5px;
+        transition:border-color .15s ease,color .15s ease}
   .tiny:hover{border-color:var(--ink);color:var(--ink)}
   .tiny:disabled{opacity:.5;cursor:default;border-color:var(--rule)}
   .tiny.alt{border-style:dashed}
-  .explained{margin-top:9px!important;padding-left:11px;border-left:2px solid var(--rule-2);
-             font-style:italic}
+  .explained{margin-top:10px!important;padding-left:11px;border-left:2px solid var(--rule-2)}
 
-  /* Quiet state reads as relief, not absence: a dashed box and a solid
-     green dot borrow the traffic signal's own "go" colour. */
+  /* Quiet reads as relief, not absence. */
   .empty{margin-top:20px;padding:20px 18px;display:flex;align-items:flex-start;gap:13px;
-         border:1px dashed var(--rule-2);color:var(--mute);
+         border:1px dashed var(--rule-2);border-radius:var(--r-lg);color:var(--mute);
          background:var(--surface);
-         background:color-mix(in srgb, var(--confirmed) 5%, var(--surface))}
-  .empty::before{content:"";flex:none;width:11px;height:11px;margin-top:3px;
+         background:color-mix(in srgb,var(--confirmed) 5%,var(--surface))}
+  .empty::before{content:"";flex:none;width:11px;height:11px;margin-top:5px;
                  border-radius:50%;background:var(--confirmed)}
-  .foot{margin-top:32px;padding-top:18px;border-top:1px solid var(--rule);
-        font-family:var(--mono);font-size:10.5px;line-height:1.8;color:var(--faint)}
+  .foot{margin-top:34px;padding-top:18px;border-top:1px solid var(--rule);
+        font:400 11px/1.8 var(--mono);color:var(--faint)}
   .foot strong{color:var(--mute);font-weight:600}
 
+  /* ============================================================ narrow */
+  @media (max-width:520px){
+    #setup{padding:16px}
+    .why-grid{gap:10px}
+    .handoff{padding:14px}
+    .options{gap:16px}
+  }
+
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}}
+  @keyframes settle{from{opacity:0}}
   [hidden]{display:none!important}
-  @media (max-width:560px){ .legend{gap:10px} }
   @media (prefers-reduced-motion:reduce){
-    *{transition:none!important;animation:none!important}
+    *,*::before,*::after{transition:none!important;animation:none!important}
     .item:hover{transform:none}
+    #status::after{display:none}
   }
 </style>
 
@@ -366,9 +585,15 @@
       </span>
       <h1>Detour<span class="atx">ATX</span></h1>
     </div>
-    <p class="lede">Austin publishes every road closure in the city and a detour for none of
-      them. Put in two addresses and this shows what is actually broken on the way, how much
+    <p class="lede"><span class="thesis"><span class="dim">Austin publishes every road closure in the city and </span>a detour for none of them.</span>
+      Put in two addresses and this shows what is actually broken on the way, how much
       of it can be trusted, and what to do about it.</p>
+    <div class="ladder" aria-hidden="true">
+      <span class="ladder-label">Every item is labelled</span>
+      <span class="chip c-confirmed">Confirmed</span>
+      <span class="chip c-reported">Reported</span>
+      <span class="chip c-probably-over">Probably over</span>
+    </div>
   </header>
 
   <section class="why">
