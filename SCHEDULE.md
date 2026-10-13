@@ -25,6 +25,23 @@ Email needs six values in `.env` &mdash; see `.env.example`. Use an **app
 password**, never your account password. A webhook needs only
 `DETOUR_WEBHOOK_URL`, and must be HTTPS.
 
+### The calendar
+
+```
+python cli.py --run-all --ics out/detour.ics
+```
+
+One event per route with something worth knowing, alerting 20 minutes
+before departure and carrying the Google Maps link. Import it, or serve
+the file and subscribe to the URL so it refreshes itself.
+
+Give a route a `leave_at` and the events land at the time the trip
+actually starts, shifted earlier by whatever the detour costs:
+
+```json
+{ "leave_at": "08:30", "days": [0, 1, 2, 3, 4] }
+```
+
 ### Silence is not a message
 
 A brief with nothing new is **not sent**. The Correspondent already suppresses

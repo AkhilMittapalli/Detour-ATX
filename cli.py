@@ -12,8 +12,10 @@ import dataclasses
 import json
 import os
 import sys
+from pathlib import Path as FsPath
 
 from detour import brief as brief_mod
+from detour import calendar as cal
 from detour import handoff
 from detour import confidence as conf
 from detour import cluster, config, ledger, llm, plan, route as rt
@@ -383,6 +385,12 @@ def main() -> int:
         help="create a saved route from two addresses (use with --from and --to)",
     )
     parser.add_argument(
+        "--ics",
+        metavar="PATH",
+        help="write the run as an .ics calendar file. Alerts fire before "
+             "departure, and each event carries the Google Maps link",
+    )
+    parser.add_argument(
         "--bike",
         action="store_true",
         help="read the route as a cyclist: closures on bike infrastructure are "
@@ -588,6 +596,19 @@ def main() -> int:
             if not results:
                 print("No saved routes. Add one with --add-route.")
                 return 0
+
+            if args.ics:
+                events = [r.event for r in results if r.event is not None]
+                target = FsPath(args.ics)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # newline="" keeps Python from turning the CRLF the spec
+                # requires into CRCRLF on Windows.
+                with open(target, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(cal.render(events))
+                print("")
+                print(f"  Calendar: {len(events)} event(s) -> {target}")
+                if not events:
+                    print(paint("  Nothing worth putting in a calendar today.", "dim"))
 
             try:
                 carrier = tp.build(args.transport, out_dir=daily.OUT_DIR)

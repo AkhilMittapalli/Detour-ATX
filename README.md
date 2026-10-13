@@ -417,6 +417,68 @@ warns a rider of nothing.
 
 ---
 
+## Three surfaces, one brief
+
+The product does not win by being opened. Nobody opens a second map while
+driving, and a daily-use app competing with Google Maps for a tap is a
+fight lost on principle rather than execution. So the brief goes to the
+reader through whatever they already have open.
+
+**Push, not pull.** `--run-all` builds a brief per saved route and
+delivers by file, email or webhook — the webhook covers Slack, Discord
+and ntfy, which is mobile push without writing a mobile app. Every
+transport is a dry run until `--send`. A brief with nothing new is not
+sent at all.
+
+**The handoff.** Every brief ends in a Google Maps link carrying the
+derived detour as waypoints. See below.
+
+**The calendar.** `--ics` writes the run as an iCalendar file: one event
+per route that has something worth knowing, alerting 20 minutes before
+departure, with the Maps link in the event's URL field. Calendar alert,
+tap, directions — the brief never has to be opened.
+
+```bash
+python cli.py --run-all --ics out/detour.ics
+```
+
+### Naming a time instead of a comparison
+
+"Leave five minutes earlier" is advice with no anchor. Earlier than what?
+
+A saved route can record when the trip actually starts:
+
+```json
+{ "name": "South Congress commute", "leave_at": "08:30", "days": [0,1,2,3,4] }
+```
+
+With that, the same fact becomes *"Leave by 08:25"* — in the push payload,
+in the calendar event title, and as the event's start time. Nobody does
+arithmetic at 07:10. `days` is Monday-as-0; a route that does not run
+today produces no event rather than a false alarm.
+
+Both are optional. Without them the calendar still files a heads-up for
+the morning and simply declines to claim a departure time it does not
+know.
+
+### What it refuses to do
+
+An event is only written when there is something to say. A calendar that
+fills with "nothing is wrong" is a calendar someone switches off, and
+then the one morning it matters they do not see that either. The UID is
+stable per route per day, so re-importing updates an event rather than
+duplicating it.
+
+iCalendar is also unforgiving in a quiet way: RFC 5545 wants CRLF endings,
+content lines folded at 75 **octets**, and commas, semicolons, backslashes
+and newlines escaped inside TEXT values. Google Calendar does not report a
+malformed file — it simply declines to import it, which is worse than an
+error. All of that is hand-written against the spec, with tests, and the
+folding counts octets rather than characters because the rewritten
+descriptions carry em dashes.
+
+---
+
 ## Handing off to Google Maps
 
 There is no way to put anything inside the Maps app, and there never will
@@ -593,6 +655,7 @@ detour/
   severity.py     three tiers, and how confidence caps them
   bike.py         the cyclist view: comfort, re-tiering, cycling stress
   handoff.py      the Google Maps link a brief ends in
+  calendar.py     the brief as an .ics event, alarm and all
   route.py        saved routes and the spatial join
   describe.py     permit narrative to one readable sentence
   graph.py        routable street graph, Dijkstra, route map-matching
@@ -619,9 +682,9 @@ detour/
 dist/             the published dashboard (index.html + data.js)
   brief.py        assembly and ordering
 cli.py            terminal renderer, --audit, --bike, --confirm, --ledger,
-                  --verify, --verify-route, --models, --json
+                  --verify, --verify-route, --models, --ics, --json
 routes/           saved routes, traced from the centreline layer
-tests/            261 offline tests, no network, no API key
+tests/            292 offline tests, no network, no API key
 ```
 
 ## The dashboard

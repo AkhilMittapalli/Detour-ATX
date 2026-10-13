@@ -209,11 +209,46 @@ def write(brief, *, tell, held, directory: FsPath, reader: str = "you") -> FsPat
     return target
 
 
+def leave_by(brief) -> str:
+    """The departure time this route now needs, as "HH:MM", or "".
+
+    "Leave five minutes earlier" is advice with no anchor — earlier than
+    what? Once the route records when the trip normally starts, the same
+    fact can be stated as a time, which is a thing someone can act on
+    without doing arithmetic at 07:10.
+    """
+    route = getattr(brief, "route", None)
+    leaves = getattr(route, "leaves_at", None)
+    if leaves is None:
+        return ""
+
+    delta = getattr(brief, "delta", None)
+    if delta is None or not getattr(delta, "affected", False) or getattr(
+        delta, "implausible", False
+    ):
+        return ""
+
+    extra = max(0, round(getattr(delta, "extra_s", 0) / 60))
+    if not extra:
+        return ""
+
+    start = dt.datetime.combine(dt.date.today(), leaves) - dt.timedelta(minutes=extra)
+    return start.strftime("%H:%M")
+
+
 def plain_text(brief, *, tell) -> str:
     """A terse version for a push payload or an SMS."""
     blocking = [i for i, _ in tell if i.tier is severity.Tier.BLOCKING]
+    when = leave_by(brief)
+    lead = f"Leave by {when} — " if when else ""
+
     if not blocking:
+        # Still worth saying when the detour costs time, even if nothing
+        # on the route reaches the top tier.
+        if when:
+            return f"{brief.route.name}: leave by {when} — your usual way is cut."
         return f"{brief.route.name}: nothing blocking today."
+
     first = blocking[0]
     extra = f" (+{len(blocking) - 1} more)" if len(blocking) > 1 else ""
-    return f"{brief.route.name}: {first.headline}{extra}"
+    return f"{lead}{brief.route.name}: {first.headline}{extra}"

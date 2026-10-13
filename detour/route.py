@@ -12,7 +12,9 @@ false-negative rate for false precision we have not earned.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path as FsPath
 
@@ -35,6 +37,27 @@ class Route:
     # coordinates, and the data is already sitting there.
     origin: str = ""
     destination: str = ""
+    # When this trip normally starts, as "HH:MM" local, and on which days.
+    # Without it "leave five minutes earlier" is advice with no anchor —
+    # earlier than what? With it the brief can name a time, the daily run
+    # knows when to fire, and the calendar has something to attach to.
+    leave_at: str = ""
+    days: tuple[int, ...] = ()
+
+    @property
+    def leaves_at(self) -> dt.time | None:
+        """The departure time, or None when the route never set one."""
+        match = re.match(r"^\s*(\d{1,2}):(\d{2})\s*$", self.leave_at or "")
+        if not match:
+            return None
+        hour, minute = int(match.group(1)), int(match.group(2))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return None
+        return dt.time(hour, minute)
+
+    def runs_on(self, day: dt.date) -> bool:
+        """Monday is 0. An empty `days` means every day."""
+        return not self.days or day.weekday() in self.days
 
     @property
     def length_m(self) -> float:
@@ -73,6 +96,8 @@ def load_route(path: str | FsPath) -> Route:
         path=geo.densify(waypoints),
         origin=(data.get("origin") or "").strip(),
         destination=(data.get("destination") or "").strip(),
+        leave_at=(data.get("leave_at") or "").strip(),
+        days=tuple(sorted({int(d) for d in (data.get("days") or []) if 0 <= int(d) <= 6})),
     )
 
 

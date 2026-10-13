@@ -16,7 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path as FsPath
 
 from . import brief as brief_mod
-from . import correspondent, deliver, plan, route as rt, severity, sources
+from . import calendar as cal
+from . import correspondent, deliver, plan, route as rt, severity, sources, workcal
 
 OUT_DIR = FsPath(__file__).resolve().parent.parent / "out"
 
@@ -33,6 +34,7 @@ class Outcome:
     html: str = ""
     error: str = ""
     news: list[str] = field(default_factory=list)
+    event: object | None = None
 
     @property
     def ok(self) -> bool:
@@ -77,12 +79,29 @@ def run_route(
     )
     outcome.push_text = deliver.plain_text(result, tell=tell)
 
+    # The calendar surface. Built here rather than in the writer because it
+    # needs the curated list - an event that repeats yesterday's closure is
+    # exactly the thing that gets a calendar muted.
+    outcome.event = cal.event_for(
+        result, tell, day=cal_day(now), mode="drive"
+    )
+
     # Only remember what was actually shown. Holding an item back must not
     # reset its clock, or a suppressed closure would look new again in a week.
     if remember and tell:
         correspondent.record_told([i for i, _ in tell], reader=reader, now=now)
 
     return outcome
+
+
+def cal_day(now: dt.datetime) -> dt.date:
+    """Which day the calendar event belongs to.
+
+    The run happens before dawn, so "today" is the day the reader is about
+    to travel, not the UTC date — which after 19:00 Central has already
+    rolled over and would file the event for tomorrow.
+    """
+    return workcal.to_central(now).date()
 
 
 def run_all(
