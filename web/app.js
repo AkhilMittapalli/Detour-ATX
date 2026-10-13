@@ -663,10 +663,24 @@ function renderBrief(brief) {
         </a>`;
     }
     if (items.length) {
-      html += `<button class="handoff-go alt" id="to-calendar" type="button">
-          Add to calendar</button>`;
+      /* One click beats a download plus an import screen, so the Google
+       * link is the offered path and the file is the fallback for the
+       * calendars that have no equivalent URL. */
+      const ev = CAL.eventFor(
+        { ...brief, deltaText: E.deltaSummary(delta) },
+        { departAt, mapsUrl: handoff ? handoff.url : '' }
+      );
+      if (ev) {
+        html += `<a class="handoff-go alt" href="${esc(CAL.googleUrl(ev))}"
+            target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>`;
+      }
     }
     html += '</div>';
+    if (items.length) {
+      html += `<p class="handoff-alt">Using Apple Calendar or Outlook?
+        <button class="linkish" id="to-calendar" type="button">Download the .ics file</button>
+        and open it &mdash; it will offer to add the event.</p>`;
+    }
     if (handoff && handoff.caveat) {
       html += `<p class="handoff-note">${esc(handoff.caveat)}</p>`;
     }

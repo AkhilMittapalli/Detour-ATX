@@ -187,8 +187,35 @@ export function render(events, now = new Date()) {
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
+/* One click into Google Calendar, no file and no import step.
+ *
+ * Downloading an .ics and then finding Settings > Import is three screens
+ * of work for something the reader asked for once. This is the same
+ * handoff the Maps button makes: do not ask anyone to adopt a new place
+ * to keep things, just put it where they already keep them.
+ *
+ * `ctz` pins the event to Austin regardless of the viewer's own calendar
+ * timezone, which is the same reasoning as the floating times in the .ics:
+ * an 08:30 Austin departure should read 08:30.
+ */
+const GCAL = 'https://calendar.google.com/calendar/render';
+
+export function googleUrl(event) {
+  if (!event) return '';
+  const end = new Date(event.start.getTime() + Math.max(5, event.minutes) * 60000);
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: event.summary,
+    dates: `${stampLocal(event.start)}/${stampLocal(end)}`,
+    details: event.description,
+    ctz: 'America/Chicago',
+  });
+  return `${GCAL}?${params.toString()}`;
+}
+
 /* Hand the file to the browser. A Blob rather than the downloads
- * capability, so this works the same on localhost and when published. */
+ * capability, so this works the same on localhost and when published.
+ * Kept for Apple Calendar and Outlook, which have no equivalent URL. */
 export function download(text, filename = 'detour-atx.ics') {
   const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
