@@ -415,7 +415,11 @@ async function buildBrief(plan, note) {
 
   note('Working out the detour');
   const fullClosures = zones.filter((z) => (z.vehicle_impact || '').toLowerCase() === 'all-lanes-closed');
-  const delta = E.detourDelta(plan.graph, plan.waypoints, fullClosures);
+  // `toll.avoided` rather than the checkbox: if no toll-free route existed
+  // the user is already on a tollway, and blocking them here would only
+  // fail to find a detour at all.
+  const delta = E.detourDelta(plan.graph, plan.waypoints, fullClosures,
+                              { avoidTolls: !!(plan.toll && plan.toll.avoided) });
 
   if (delta && delta.affected && delta.detourLine) state.map.showDetour(delta.detourLine);
 

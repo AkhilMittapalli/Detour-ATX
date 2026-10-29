@@ -421,13 +421,23 @@ export function blockClosure(graph, zone) {
   return { label, road, edges: matched };
 }
 
-export function detourDelta(graph, waypoints, closures) {
+export function detourDelta(graph, waypoints, closures, { avoidTolls = false } = {}) {
   if (waypoints.length < 2) return null;
   const start = nearestNode(graph, waypoints[0]);
   const goal = nearestNode(graph, waypoints[waypoints.length - 1]);
   if (!start || !goal) return null;
 
   graph.edges.forEach((e) => { e.blocked = false; });
+
+  /* Someone who asked to avoid tolls meant it for the whole trip, not just
+   * the part before a closure. Without this the main route dodges the
+   * tollway and the detour around a shut street quietly puts them back on
+   * it — a preference silently dropped at the worst moment.
+   *
+   * Safe to block before the baseline because followRoute ignores blocked
+   * edges by design: it is retracing a route that already exists, not
+   * choosing one. */
+  if (avoidTolls) blockTolls(graph);
 
   const baseline = followRoute(graph, waypoints);
   if (!baseline) return null;
