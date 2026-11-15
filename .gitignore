@@ -6,6 +6,7 @@ ledger.jsonl
 out/
 drafts/
 snapshot.json
+node_modules/
 
 # Secrets. Deliberately broad: a real key was once found in a file named
 # ".en" — a truncated ".env" that the exact-name rule did not catch.
