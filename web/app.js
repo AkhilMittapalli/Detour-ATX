@@ -5,11 +5,15 @@
  * Socrata filters server-side by bounding box, so there is no backend.
  */
 
+import { inject } from './analytics.js';
 import * as E from './engine.js';
 import * as D from './data.js';
 import { createMap } from './map.js';
 import { recommend, planningOptions } from './advice.js';
 import * as CAL from './calendar.js';
+
+// Initialize Vercel Web Analytics
+inject();
 
 const CORRIDOR_PAD_M = 2000;
 const WAYPOINT_SPACING_M = 110;

@@ -1,0 +1,31 @@
+{
+  "name": "detour-atx",
+  "version": "1.0.0",
+  "description": "A daily briefing of what is broken on your route, built from the City of Austin's open feeds.",
+  "type": "module",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AkhilMittapalli/Detour-ATX.git"
+  },
+  "keywords": [
+    "austin",
+    "traffic",
+    "routing",
+    "analytics"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AkhilMittapalli/Detour-ATX/issues"
+  },
+  "homepage": "https://github.com/AkhilMittapalli/Detour-ATX#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
